@@ -24,8 +24,8 @@ runMistyRAnalysis <- function(spatial_data, spot_mixture, output_dir, out_prefix
   library(Seurat)
   library(mistyR)
   library(future)
-  source("./config/misty_utilities.R")
-  source("./config/run_colocalization.R")
+  source(system.file("data", "misty_utilities.R", package = "easySingleCell"))
+  source(system.file("data", "run_colocalization.R", package = "easySingleCell"))
 
   # Check and handle unmatched barcodes
   unmatched_barcodes <- setdiff(colnames(spatial_data), rownames(spot_mixture))

@@ -112,7 +112,7 @@ setMethod("XenaTools_xp", "PanCancer", function(object, ...) {
 
   # Clean
   message("=> Start! Data clean.")
-  coding_gene <- system.file("data", "protein_coding.Rdata", package = "OneGene")
+  coding_gene <- system.file("data", "protein_coding.Rdata", package = "easySingleCell")
   load(coding_gene)
 
   coding_gene <- coding_gene %>%
@@ -493,7 +493,7 @@ TCGAUniCox <- function(genes, expr.tpm, surv, cli, width = 8, height = 6,output_
   write.table(rt, file = file.path(output_dir, "rt.txt"), sep = "\t", row.names = FALSE, quote = FALSE)
 
   # Plot forest
-  source('./config/bioForest.R')
+  source(system.file("data", "bioForest.R", package = "easySingleCell"))
   bioForest(coxFile = file.path(output_dir, "uniCox.txt"),
             forestFile = file.path(output_dir, "forest.pdf"))
 

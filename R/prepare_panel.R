@@ -144,7 +144,10 @@ PreparePyscenic <- function(scRNA, output_dir = './output_data/', min_cells = 0,
   library(SCopeLoomR)
 
   # Load pre-prepared data
-  load('./data/pyscenic_database.Rdata')
+  load(system.file("data", "pyscenic_database.Rdata", package = "easySingleCell"))
+
+  # Load pre-definced function
+  source(system.file("data", "pyscenic.R", package = "easySingleCell"))
 
   # Split the Seurat object by cell type
   seu.list <- SplitObject(scRNA, split.by = "celltype")

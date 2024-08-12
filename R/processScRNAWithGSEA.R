@@ -24,9 +24,10 @@
 #' }
 
 runScGSEA <- function(sce, ident1, ident2, logfc_threshold = 0.1,
-                              gmt_paths = list("./data/h.all.v7.4.symbols.gmt",
-                                               "./data/c5.go.bp.v7.4.symbols.gmt",
-                                               "./data/c2.cp.kegg.v7.4.symbols.gmt"),
+                              gmt_paths = list(system.file("data", "h.all.v7.4.symbols.gmt", package = "easySingleCell"),
+                                               system.file("data", "c5.go.bp.v7.4.symbols.gmt", package = "easySingleCell"),
+                                               system.file("data", "c2.cp.kegg.v7.4.symbols.gmt", package = "easySingleCell")
+                                               ),
                               pvalue_cutoff = 0.05, p_adjust_method = 'none') {
 
   # Load necessary libraries

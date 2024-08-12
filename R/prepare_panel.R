@@ -105,6 +105,53 @@ PrepareCell2loc <- function(input_file, output_dir = "output_data", prefix = "")
 
 
 # =========== 3. PreparePyscenic =============
+# makeMetaCells.R
+
+#' Create Metacells
+#'
+#' This function creates metacells from a Seurat object.
+#'
+#' @param seu A Seurat object containing the single-cell RNA-seq data.
+#' @param min.cells Minimum number of cells required to form a metacell. Default is 10.
+#' @param reduction The reduction method to use. Default is "umap".
+#' @param dims Dimensions to use for the reduction. Default is 1:2.
+#' @param k.param Number of nearest neighbors to use in the clustering. Default is 10.
+#' @param cores Number of cores to use for parallel computation. Default is 20.
+#'
+#' @return A list containing the metacell matrix and metadata.
+#' @import Seurat
+#' @import parallel
+#' @import Matrix
+#' @import dplyr
+makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k.param = 10, cores = 20) {
+  seu <- seu %>%
+    FindNeighbors(reduction = reduction, dims = dims, k.param = k.param) %>%
+    FindClusters(res = 50)
+  metadata <- seu@meta.data
+  metadata$METACELL_ID <- factor(metadata$seurat_clusters)
+  dge_mat <- seu[["RNA"]]@counts
+
+  dge_mat_mc <- parallel::mclapply(levels(metadata$METACELL_ID), function(xx) {
+    cells <- rownames(subset(metadata, METACELL_ID == xx))
+    Matrix::rowSums(dge_mat[, cells])
+  }, mc.cores = cores)
+  dge_mat_mc <- do.call(cbind, dge_mat_mc)
+
+  metacell_metadata <- metadata[["METACELL_ID"]] %>% table() %>% as.data.frame()
+  colnames(metacell_metadata) <- c("METACELL_ID", "CELL_COUNT")
+  rownames(metacell_metadata) <- metacell_metadata[["METACELL_ID"]]
+
+  kept.cells <- subset(metacell_metadata, CELL_COUNT >= min.cells)[["METACELL_ID"]]
+  metacells <- list(
+    mat = dge_mat_mc[, kept.cells],
+    metadata = metacell_metadata[kept.cells, ]
+  )
+  colnames(metacells$mat) <- paste0(seu@project.name, ".METACELL_", kept.cells)
+  rownames(metacells$metadata) <- colnames(metacells$mat)
+  return(metacells)
+}
+
+
 
 #' @title Prepare Data for pySCENIC Analysis
 #' @description This function prepares the data for pySCENIC analysis by splitting the Seurat object by cell type, creating meta cells, and generating the necessary files for pySCENIC.
@@ -145,9 +192,6 @@ PreparePyscenic <- function(scRNA, output_dir = './output_data/', min_cells = 0,
 
   # Load pre-prepared data
   load(system.file("data", "pyscenic_database.Rdata", package = "easySingleCell"))
-
-  # Load pre-definced function
-  source(system.file("data", "pyscenic.R", package = "easySingleCell"))
 
   # Split the Seurat object by cell type
   seu.list <- SplitObject(scRNA, split.by = "celltype")

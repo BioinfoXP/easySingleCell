@@ -43,7 +43,7 @@ PlotViolin <- function(df, x, y, comparisons = NULL,
                        title = NULL, xlab = NULL, ylab = NULL,
                        angle_x_text = 45, legend_position = "none",
                        signif_test = "t.test", signif_map = TRUE,
-                       signif_tip_length = c(0.01),
+                       step_increase=0.1,signif_tip_length = c(0.01),
                        x_limits = NULL, y_limits = NULL,
                        x_breaks = 1, y_breaks = 1) {
 
@@ -76,6 +76,7 @@ PlotViolin <- function(df, x, y, comparisons = NULL,
     p <- p + geom_signif(comparisons = comparisons,
                          map_signif_level = signif_map,
                          test = signif_test,
+                         step_increase = step_increase,
                          tip_length = signif_tip_length,
                          size = 0.8, color = "black")
   }
@@ -83,4 +84,4 @@ PlotViolin <- function(df, x, y, comparisons = NULL,
   return(p)
 }
 
-
+PlotViolin(iris,x = 'Species','Sepal.Length',y_limits = c(5,10),y_breaks = 0.5,comparisons = list(c('setosa','versicolor'),c('versicolor','virginica')),signif_tip_length = 0.0)

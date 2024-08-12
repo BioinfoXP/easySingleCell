@@ -1598,8 +1598,376 @@ runMistyRAnalysis <- function(spatial_data, spot_mixture, output_dir, out_prefix
 # )
 
 
+# =============== 14. runInferCNV ==========
+#' @title Prepare Data for InferCNV
+#'
+#' @description  This function prepares the single-cell expression data for InferCNV analysis.
+#'
+#' @param sce_epi Single-cell expression data for the tumor epithelial cells.
+#' @param sce_refer Single-cell expression data for the reference cells (normal epithelial or immune cells).
+#' @param celltype Column name in meta.data that contains cell type information.
+#' @param infercnv_path Path to save InferCNV results.
+#' @param name Name for the InferCNV run.
+#' @return A list containing the merged single-cell expression data and the path to saved files.
+#' @export
+#' @import qs
+#' @import dplyr
+#' @import Seurat
+#' @example
+#' \dontrun{
+#' # Ensure necessary libraries are loaded
+#' library(infercnv)
+#' library(qs)
+#' # Example usage:
+#' # Prepare data using a custom function
+#' prepared_data <- PrepareDataForInferCNV(
+#'   sce_epi = sce_epi,
+#'   sce_refer = sce_refer,
+#'   celltype = 'celltype',
+#'   infercnv_path = './output_data/inferCNV/',
+#'   name = 'infer_run'
+#' )
+#' }
+PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
+                                   infercnv_path = './output_data', name = 'infer_run') {
+  dir.create(infercnv_path, recursive = TRUE, showWarnings = FALSE)
+
+  # Normalize and cluster reference cells
+  sce_refer <- sce_refer %>%
+    NormalizeData() %>%
+    FindClusters()
+
+  # Merge and normalize data
+  sce_infer <- merge(sce_epi, sce_refer) %>%
+    NormalizeData() %>%
+    FindClusters()
+
+  # Save count matrix and cell type labels
+  qsave(as.matrix(sce_infer[["RNA"]]@counts), file = paste0(infercnv_path, name, '.qs'))
+  write.table(sce_infer@meta.data[, celltype], file = paste0(infercnv_path, name, '.cell_type.label.txt'),
+              sep = "\t", quote = FALSE, col.names = FALSE)
+
+  return(list(sce_infer = sce_infer, infercnv_path = infercnv_path, name = name))
+}
 
 
 
 
+
+
+#' Run InferCNV Analysis
+#'
+#' This function performs InferCNV analysis on the prepared single-cell expression data.
+#'
+#' @param infercnv_path Path to the saved InferCNV results.
+#' @param gene_order_file Path to the gene order file.
+#' @param ref_group_names Reference group names for normal cells.
+#' @param name Name for the InferCNV run.
+#' @param num_threads Number of threads to use for the analysis.
+#' @return The InferCNV object containing the analysis results.
+#' @export
+#' @import infercnv
+#' @import qs
+#' @examples
+#' \dontrun{
+#' # Ensure necessary libraries are loaded
+#' library(infercnv)
+#' library(qs)
+#'
+#' # Example usage:
+#' # Prepare data using a custom function
+#' prepared_data <- PrepareDataForInferCNV(
+#'   sce_epi = sce_epi,
+#'   sce_refer = sce_refer,
+#'   celltype = 'cell_type',
+#'   infercnv_path = './output_data/Figure2/inferCNV/',
+#'   name = 'infer_run'
+#' )
+#'
+#' # Run InferCNV analysis
+#' infercnv_obj <- RunInferCNVAnalysis(
+#'   infercnv_path = prepared_data$infercnv_path,
+#'   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
+#'   ref_group_names = c("T/NK", "B Cell"),
+#'   name = prepared_data$name,
+#'   num_threads = 16
+#' )
+#' }
+RunInferCNVAnalysis <- function(infercnv_path = './output_data',
+                                gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
+                                ref_group_names,
+                                name = 'infer_run',
+                                num_threads = 12) {
+  # Load data for InferCNV
+  # matrix_counts: path to the .qs file containing the raw counts matrix
+  # annotations_file: path to the .txt file containing cell type annotations
+  # out_path: directory to save the output of the InferCNV analysis
+  matrix_counts <- qread(paste0(infercnv_path, '/', name, '.qs'))
+  annotations_file <- paste0(infercnv_path, '/', name, '.cell_type.label.txt')
+  out_path <- paste0(infercnv_path, '/', name)
+
+  # Create InferCNV object
+  infercnv_obj <- CreateInfercnvObject(raw_counts_matrix = matrix_counts,
+                                       annotations_file = annotations_file,
+                                       delim = "\t",
+                                       gene_order_file = gene_order_file,
+                                       ref_group_names = ref_group_names,
+                                       chr_exclude = c("chrY", "chrM"))
+
+  # Run InferCNV analysis
+  infercnv_obj <- infercnv::run(infercnv_obj, cutoff = 0.1, out_dir = out_path,
+                                no_prelim_plot = TRUE, cluster_by_groups = TRUE,
+                                denoise = TRUE, HMM = FALSE, min_cells_per_gene = 10,
+                                num_threads = num_threads, write_expr_matrix = TRUE)
+
+  # Save the InferCNV object
+  saveRDS(infercnv_obj, file = paste0(out_path, '/infercnv_obj.rds'))
+
+  return(infercnv_obj)
+}
+
+
+
+
+
+
+#' Cluster and Visualize InferCNV Results
+#'
+#' This function performs clustering on the InferCNV results and generates a heatmap.
+#'
+#' @param infercnv_obj The InferCNV object containing the analysis results.
+#' @param gene_order_file Path to the gene order file.
+#' @param ref_cell_name Reference cell names for clustering and visualization.
+#' @param obs_cell_name Observed cell names for clustering and visualization.
+#' @param ref_group Reference group label for clustering and visualization.
+#' @param obs_group Observed group label for clustering and visualization.
+#' @param k_clusters Number of clusters for k-means clustering (default is 5).
+#' @param heatmap_colors Colors for the heatmap (default is c("#2166ac", "white", "#b2182b")).
+#' @param cluster_colors Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39")).
+#' @param out_path Path to save the heatmap and clustering results.
+#' @return A data frame containing the clustering results.
+#' @export
+#' @import ComplexHeatmap
+#' @import dplyr
+#' @import grid
+#' @import scales
+#' @import ggplot2
+#' @import ggpubr
+#' @import ggsignif
+#' @import tidyverse
+#' @import ggprism
+#' @import RColorBrewer
+#' @examples
+#' \dontrun{
+#' library(infercnv)
+#' library(ComplexHeatmap)
+#' library(dplyr)
+#' library(grid)
+#' library(scales)
+#' library(ggplot2)
+#' library(ggpubr)
+#' library(ggsignif)
+#' library(tidyverse)
+#' library(ggprism)
+#' library(vioplot)
+#' library(RColorBrewer)
+#'
+#' Example usage:
+#' Assume `infercnv_obj` is the result from `RunInferCNVAnalysis`
+#' Kmeas.res <- RunInferCNVCluster(
+#'   infercnv_obj = infercnv_obj,
+#'   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
+#'   ref_cell_name = c("T/NK","B Cell"),#Or normal epithlial
+#'   obs_cell_name = "epithlial",#epithlial in tumor sample
+#'   ref_group = "immune",# or normal epi
+#'   obs_group = "epithelial",# epithlial in tumor sample
+#'   k_clusters = 5,
+#'   heatmap_colors = c("#2166ac", "white", "#b2182b"),
+#'   cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
+#'   out_path = "./output_data/inferCNV/"
+#' )
+#' }
+RunInferCNVCluster <- function(infercnv_obj, gene_order_file, ref_cell_name, obs_cell_name, ref_group, obs_group,
+                                        k_clusters = 5, heatmap_colors = c("#2166ac", "white", "#b2182b"),
+                                        cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
+                                        out_path) {
+  expr <- infercnv_obj@expr.data
+
+  # Load gene position information
+  gene_pos <- read.delim(gene_order_file, header = FALSE)
+  gene_pos <- gene_pos[gene_pos$V1 %in% rownames(expr), ]
+  new_cluster <- unique(gene_pos$V2)
+
+  top_color <- HeatmapAnnotation(cluster = anno_block(labels = gsub("chr", "", new_cluster),
+                                                      gp = gpar(col = "white"),
+                                                      labels_gp = gpar(cex = 1, col = "black"),
+                                                      height = unit(5, "mm")))
+
+  # Extract reference and observed cell positions
+  ref_cell <- c(infercnv_obj@reference_grouped_cell_indices[[ref_cell_name]][[1]])
+  obs_cell <- c(infercnv_obj@observation_grouped_cell_indices[[obs_cell_name]][[1]])
+  cell_anno <- data.frame(cell_id = c(colnames(expr)[ref_cell], colnames(expr)[obs_cell]),
+                          group = c(rep(ref_group, length(ref_cell)), rep(obs_group, length(obs_cell))))
+
+  # Perform k-means clustering
+  set.seed(123)
+  kmeans_result <- kmeans(t(expr), k_clusters)
+  kmeans_df <- data.frame(kmeans_result$cluster)
+  colnames(kmeans_df) <- "k_cluster"
+  kmeans_df <- as_tibble(cbind(cell_id = rownames(kmeans_df), kmeans_df))
+  kmeans_df <- kmeans_df %>% inner_join(cell_anno, by = "cell_id") %>% arrange(k_cluster)
+  kmeans_df$k_cluster <- as.factor(kmeans_df$k_cluster)
+
+  # Create row annotations
+  annotation_row <- data.frame(k_cluster = kmeans_df$k_cluster, group = kmeans_df$group)
+  row.names(annotation_row) <- kmeans_df$cell_id
+  saveRDS(annotation_row, file = paste0(out_path, '/Kmeans.rds'))
+
+  names(cluster_colors) <- as.character(1:k_clusters)
+
+  left_anno <- rowAnnotation(df = annotation_row,
+                             col = list(group = eval(parse(text = paste0("c(", ref_group, "='#00A0877F',", obs_group, "='#E64B357F')"))),
+                                        k_cluster = cluster_colors),
+                             show_annotation_name = FALSE)
+
+  # Plot heatmap
+  pdf(paste0(out_path, '/CNV_heatmap.pdf'), width = 9.5, height = 4)
+  ht <- Heatmap(t(log2(expr))[rownames(annotation_row), ],
+                col = colorRamp2::colorRamp2(c(-0.5, 0, 0.5), heatmap_colors),
+                cluster_rows = FALSE, cluster_columns = FALSE,
+                show_column_names = FALSE, show_row_names = FALSE,
+                column_split = factor(gene_pos$V2, new_cluster),
+                heatmap_legend_param = list(title = "inferCNV",
+                                            direction = "vertical",
+                                            title_position = "leftcenter-rot",
+                                            legend_height = unit(3, "cm")),
+                left_annotation = left_anno,
+                row_title = NULL,
+                column_title = NULL,
+                top_annotation = top_color,
+                border = TRUE)
+  draw(ht, heatmap_legend_side = "right")
+  dev.off()
+
+  return(annotation_row)
+}
+
+
+
+#' Run Full InferCNV Pipeline
+#'
+#' This function runs the full pipeline for InferCNV analysis, including data preparation,
+#' InferCNV analysis, and clustering/visualization of the results.
+#'
+#' @param sce_epi Single-cell expression data for the tumor epithelial cells.
+#' @param sce_refer Single-cell expression data for the reference cells (normal epithelial or immune cells).
+#' @param celltype Column name in meta.data that contains cell type information.
+#' @param infercnv_path Path to save InferCNV results.
+#' @param name Name for the InferCNV run.
+#' @param gene_order_file Path to the gene order file (default is "hg38_gencode_v27.txt" from "easySingleCell" package).
+#' @param ref_group_names Reference group names for normal cells.
+#' @param ref_cell_name Reference cell names for clustering and visualization.
+#' @param obs_cell_name Observed cell names for clustering and visualization.
+#' @param ref_group Reference group label for clustering and visualization.
+#' @param obs_group Observed group label for clustering and visualization.
+#' @param k_clusters Number of clusters for k-means clustering (default is 5).
+#' @param heatmap_colors Colors for the heatmap (default is c("#2166ac", "white", "#b2182b")).
+#' @param cluster_colors Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39")).
+#' @param num_threads Number of threads to use for the analysis.
+#' @return A list containing the InferCNV object and the clustering results.
+#' @export
+#' @import infercnv
+#' @import qs
+#' @import dplyr
+#' @import Seurat
+#' @import ComplexHeatmap
+#' @import grid
+#' @import scales
+#' @import ggplot2
+#' @import ggpubr
+#' @import ggsignif
+#' @import tidyverse
+#' @import ggprism
+#' @import vioplot
+#' @import RColorBrewer
+#' @examples
+#' \dontrun{
+#' # Ensure necessary libraries are loaded
+#' library(infercnv)
+#' library(qs)
+#' library(dplyr)
+#' library(Seurat)
+#' library(ComplexHeatmap)
+#' library(grid)
+#' library(scales)
+#' library(ggplot2)
+#' library(ggpubr)
+#' library(ggsignif)
+#' library(tidyverse)
+#' library(ggprism)
+#' library(vioplot)
+#' library(RColorBrewer)
+#'
+#' # Example usage:
+#' # Run the full InferCNV pipeline
+#' results <- RunInferCNVPipeline(
+#'   sce_epi = sce_epi,
+#'   sce_refer = sce_refer,
+#'   celltype = 'celltype',
+#'   infercnv_path = './output_data/inferCNV/',
+#'   name = 'infer_run',
+#'   ref_group_names = c("T/NK", "B Cell"),
+#'   ref_cell_name = c("T/NK","B Cell"),
+#'   obs_cell_name = "epithlial",
+#'   ref_group = "immune",
+#'   obs_group = "epithelial",
+#'   k_clusters = 5,
+#'   heatmap_colors = c("#2166ac", "white", "#b2182b"),
+#'   cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
+#'   num_threads = 16
+#' )
+#' }
+RunInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
+                                    infercnv_path = './output_data', name = 'infer_run',
+                                    gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
+                                    ref_group_names,
+                                    ref_cell_name, obs_cell_name, ref_group, obs_group,
+                                    k_clusters = 5, heatmap_colors = c("#2166ac", "white", "#b2182b"),
+                                    cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
+                                    num_threads = 12) {
+
+  # Step 1: Prepare Data for InferCNV
+  prepared_data <- PrepareDataForInferCNV(
+    sce_epi = sce_epi,
+    sce_refer = sce_refer,
+    celltype = celltype,
+    infercnv_path = infercnv_path,
+    name = name
+  )
+
+  # Step 2: Run InferCNV Analysis
+  infercnv_obj <- RunInferCNVAnalysis(
+    infercnv_path = prepared_data$infercnv_path,
+    gene_order_file = gene_order_file,
+    ref_group_names = ref_group_names,
+    name = prepared_data$name,
+    num_threads = num_threads
+  )
+
+  # Step 3: Cluster and Visualize InferCNV Results
+  clustering_results <- RunInferCNVCluster(
+    infercnv_obj = infercnv_obj,
+    gene_order_file = gene_order_file,
+    ref_cell_name = ref_cell_name,
+    obs_cell_name = obs_cell_name,
+    ref_group = ref_group,
+    obs_group = obs_group,
+    k_clusters = k_clusters,
+    heatmap_colors = heatmap_colors,
+    cluster_colors = cluster_colors,
+    out_path = paste0(infercnv_path, '/', name)
+  )
+
+  return(list(infercnv_obj = infercnv_obj, clustering_results = clustering_results))
+}
 

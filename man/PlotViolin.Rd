@@ -18,6 +18,7 @@ PlotViolin(
   legend_position = "none",
   signif_test = "t.test",
   signif_map = TRUE,
+  step_increase = 0.1,
   signif_tip_length = c(0.01),
   x_limits = NULL,
   y_limits = NULL,

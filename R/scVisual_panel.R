@@ -316,6 +316,7 @@ plot_heatmap <- function(OR_list) {
 #' @import Seurat
 #' @import ggplot2
 #' @import export
+#' @import plyr
 #' @examples
 #' \dontrun{
 #' # Assuming `sce` is a pre-existing Seurat object
@@ -334,16 +335,17 @@ scVisTissueOR <- function(scRNA, group = 'orig.ident', celltype = 'celltype', ou
   # Perform tissue OR analysis
   OR_immune_list <- analyze_tissue_dist(meta_data = meta, output_prefix = output_prefix)
 
-  # Plot heatmap
-  p <- plot_heatmap(OR_immune_list)
-
   # Ensure the output directory exists
   dir.create(output_prefix, showWarnings = FALSE, recursive = TRUE)
 
-  # Export the plot to a PDF file
-  export::graph2pdf(p, file = paste0(output_prefix, output_file), width = width, height = height)
 
-  return(list(OR_immune_list = OR_immune_list, heatmap_plot = p))
+  # Plot heatmap
+  # Export the plot to a PDF file
+  pdf(file = paste0(output_prefix, output_file), width = width, height = height)
+  plot_heatmap(OR_immune_list)
+  dev.off()
+
+  return(OR_immune_list)
 }
 
 # Example usage

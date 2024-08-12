@@ -323,8 +323,6 @@ plot_heatmap <- function(OR_list) {
 #' }
 
 scVisTissueOR <- function(scRNA, group = 'orig.ident', celltype = 'celltype', output_prefix = "./output_figure", output_file = "/tissue_OR.pdf", width = 5, height = 4) {
-  # Load required source file
-  source(system.file("data", "tissue_OR.R", package = "easySingleCell"))
 
   # Extract metadata
   meta <- scRNA@meta.data

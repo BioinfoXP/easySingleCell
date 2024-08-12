@@ -7,7 +7,7 @@
 #' @param reduction A character string specifying the reduction method to be used (default is "umap").
 #' @param pt.size A numeric value specifying the size of the points (default is 0.0001).
 #' @param max.cutoff A numeric value specifying the maximum cutoff for the feature values (default is 1.5).
-#' @param cols A vector of colors to be used for the plot (default is `pal2`).
+#' @param cols A vector of colors to be used for the plot.
 #' @param title A character string specifying the title of the plot. If NULL, the feature name will be used as the title.
 #' @return A ggplot object representing the feature plot.
 #' @export
@@ -29,17 +29,17 @@
 #' # Example feature plot
 #' plot <- scVisFeaturePlot(
 #'   scRNA = seurat_obj,
-#'   feature = "PC_1",
+#'   feature = "CD3E",
 #'   reduction = "umap",
 #'   pt.size = 0.5,
 #'   max.cutoff = 1.5,
-#'   cols = c("blue", "red"),
+#'   cols =  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"),
 #'   title = NULL
 #' )
 #' print(plot)
 #' }
 
-scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols = pal2, title = NULL) {
+scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols =  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"), title = NULL) {
   # Ensure necessary libraries are loaded
   library(Seurat)
   library(ggplot2)
@@ -319,7 +319,6 @@ scVisCellRatioPlot <- function(scRNA, plot_by = "celltype", meta.include = NULL,
 scVisTissueOR <- function(scRNA, group = 'orig.ident', celltype = 'celltype', output_prefix = "./output_figure", output_file = "/tissue_OR.pdf", width = 5, height = 4) {
   # Load required source file
   source('./config/tissue_OR.R')
-
   # Extract metadata
   meta <- scRNA@meta.data
 

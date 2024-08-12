@@ -10,7 +10,7 @@ scVisFeaturePlot(
   reduction = "umap",
   pt.size = 1e-04,
   max.cutoff = 1.5,
-  cols = pal2,
+  cols = c("#FFEFD5", "#E6E6FA", "#87CEFA", "#6495ED", "#4169E1", "#0000CD", "#000080"),
   title = NULL
 )
 }
@@ -25,7 +25,7 @@ scVisFeaturePlot(
 
 \item{max.cutoff}{A numeric value specifying the maximum cutoff for the feature values (default is 1.5).}
 
-\item{cols}{A vector of colors to be used for the plot (default is \code{pal2}).}
+\item{cols}{A vector of colors to be used for the plot.}
 
 \item{title}{A character string specifying the title of the plot. If NULL, the feature name will be used as the title.}
 }
@@ -51,11 +51,11 @@ seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
 # Example feature plot
 plot <- scVisFeaturePlot(
   scRNA = seurat_obj,
-  feature = "PC_1",
+  feature = "CD3E",
   reduction = "umap",
   pt.size = 0.5,
   max.cutoff = 1.5,
-  cols = c("blue", "red"),
+  cols =  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"),
   title = NULL
 )
 print(plot)

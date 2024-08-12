@@ -695,6 +695,11 @@ plotMonocleTrajectories <- function(mycds, output_dir = "./output_figure/",
 #' @return NULL. The function is called for its side effects.
 #' @export
 #'
+#' @import Seurat
+#' @import ClusterGVis
+#' @import clusterProfiler
+#' @import org.Hs.eg.db
+#'
 #' @examples
 #' \dontrun{
 #' plotMonocleBranchEnrich(sce = sce, mycds = mycds, cell_type_col = 'cell_type', branch_point = 1)
@@ -773,6 +778,10 @@ plotMonocleBranchEnrich <- function(sce, mycds, cell_type_col, branch_point, num
     stop("The 'go_colors' parameter must be a non-empty vector.")
   }
 
+  library(future);library(future.apply)
+  plan(multisession,workers =1)
+
+
   # Set cell type
   Idents(sce) <- cell_type_col
 
@@ -831,7 +840,7 @@ plotMonocleBranchEnrich <- function(sce, mycds, cell_type_col, branch_point, num
 #' @param min_cells Minimum number of cells to filter communication. Default is 10.
 #'
 #' @export
-#'
+#' @import CellChat
 #' @examples
 #' \dontrun{
 #' runCellChatAnalysis(sce = your_seurat_object, celltype = 'cell_type', groupby = 'group', species = 'human', output_data_dir = "./output_data/", ncores = 4, workers = 5, min_cells = 10)

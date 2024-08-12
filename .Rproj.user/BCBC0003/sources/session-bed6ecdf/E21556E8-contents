@@ -1,0 +1,240 @@
+for (i in 1:12) {
+  dir.create(paste0('./output_data/Figure', i))
+  dir.create(paste0('./output_figure/Figure', i))
+}
+
+
+# =================1.数据读取==============
+
+source('./script/config.R')
+
+files <- list.files('./input_data/GSE208653',pattern = '^GSM.*',full.names = T)
+files
+
+
+group <- data.frame(
+  sample_id = c("GSM6360680", "GSM6360681", "GSM6360682", 
+                "GSM6360683", "GSM6360684", 
+                "GSM6360685", "GSM6360686", "GSM6360687", "GSM6360688"),
+  condition = c("NO_HPV", "NO_HPV", "N_HPV", "N_HPV", "HSIL_HPV",
+                "HSIL_HPV", "CA_HPV", "CA_HPV", "CA_HPV")
+)
+
+
+
+data <- Read10X(data.dir = files[x])
+CreateSeuratObject(counts = data, project = project_names[x],
+                   min.cells = 3, min.features = 250)
+
+sce <- mclapply(1:length(files),function(x){
+  data <- Read10X(data.dir = files[x])
+  CreateSeuratObject(counts = data, project = group$sample_id[x],
+                     min.cells = 3, min.features = 250)
+},mc.cores = length(files))
+
+
+sce <- Reduce(merge,sce)
+sce$group <- group$condition[match(sce$orig.ident,group$sample_id)]
+qs::qsave(sce,file = './output_data/Figure1/scRNA_raw.qs')
+
+
+
+# =================2.降维聚类==============
+rm(list=ls())
+source('./script/config.R')
+sce <- qs::qread('./output_data/scRNA/scRNA_raw.qs')
+
+
+sce[["percent.mt"]] <- PercentageFeatureSet(sce, pattern = "^MT-")
+
+p1 <- VlnPlot(sce, assay = 'RNA', features = c("nCount_RNA"), cols = pal, pt.size = 0, ncol = 1) + NoLegend()
+p2 <- VlnPlot(sce, assay = 'RNA', features = c("nFeature_RNA"), cols = pal, pt.size = 0, ncol = 1) + NoLegend()
+p3 <- VlnPlot(sce, assay = 'RNA', features = c("percent.mt"), cols = pal, pt.size = 0, ncol = 1) + NoLegend()
+
+p1+p2+p3
+
+
+
+minGene <- 200
+maxGene <- 5000
+pctMT <- 15
+maxCounts <- 20000
+
+scRNA_filtered <- subset(sce, subset = nFeature_RNA > minGene & 
+                           nFeature_RNA < maxGene & 
+                           percent.mt < pctMT & nCount_RNA < maxCounts)
+
+p1 <- VlnPlot(scRNA_filtered, assay = 'RNA', features = c("nCount_RNA"), cols = pal, pt.size = 0, ncol = 1) + NoLegend()
+p2 <- VlnPlot(scRNA_filtered, assay = 'RNA', features = c("nFeature_RNA"), cols = pal, pt.size = 0, ncol = 1) + NoLegend()
+p3 <- VlnPlot(scRNA_filtered, assay = 'RNA', features = c("percent.mt"), cols = pal, pt.size = 0, ncol = 1) + NoLegend()
+p1+p2+p3
+
+output_fig_dir <- './output_figure/scRNA/'
+graph2pdf(p1, file = paste0(output_fig_dir, 'AfterQC-nCount_RNA.pdf'), width = 6, height = 4)
+graph2pdf(p2, file = paste0(output_fig_dir, 'AfterQC-nFeature.pdf'), width = 6, height = 4)
+graph2pdf(p3, file = paste0(output_fig_dir, 'AfterQC-percent-mt.pdf'), width = 6, height = 4)
+
+
+
+options(future.globals.maxSize = 8000 * 1024^2)
+plan(multisession,workers=10)
+run_normalize <- function(seurat_obj) {
+  seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 3000)
+  scale_genes <- VariableFeatures(seurat_obj)
+  seurat_obj <- ScaleData(seurat_obj, features = scale_genes)
+  seurat_obj <- RunPCA(seurat_obj, features = scale_genes)
+  scRNA_harmony <- RunHarmony(seurat_obj, group.by.vars = "orig.ident")
+  seurat_obj <- FindNeighbors(scRNA_harmony, dims = 1:30, reduction = "harmony")
+  seurat_obj <- RunUMAP(seurat_obj, dims = 1:30, reduction = "harmony") %>% 
+    RunTSNE(., dims = 1:30, reduction = "harmony")
+}
+
+scRNA_normalized <- run_normalize(scRNA_filtered)
+plan(sequential)
+
+DimPlot(scRNA_normalized,reduction = 'pca')
+DimPlot(scRNA_normalized,reduction = 'harmony',group.by = 'orig.ident')
+
+
+
+# 确定聚类分辨率并运行UMAP
+resolutions <- c(0.4,0.6,0.8,1,1.2)
+scRNA_test <- FindClusters(scRNA_normalized, resolution = resolutions)
+index <- colnames(scRNA_test@meta.data)[str_detect(colnames(scRNA_test@meta.data),pattern = '^RNA_snn.*')]
+DimPlot(scRNA_test,reduction = 'tsne',
+        group.by = paste0("RNA_snn_res.", resolutions))
+DimPlot(scRNA_test,reduction = 'umap',
+        group.by = 'orig.ident',label = T,repel = T)
+
+scRNA_normalized <- FindClusters(scRNA_normalized, resolution = 1)
+rm(scRNA_test)
+
+
+qsave(scRNA_normalized,file = './output_data/Figure1/scRNA_merge_reduction.qs')
+
+
+
+
+
+
+# =================3.细胞注释==============
+
+
+
+rm(list=ls())
+source('./script/config.R')
+
+sce <- qread('./output_data/Figure1/scRNA_merge_reduction.qs')
+plan(multisession,workers=10)
+degs <- FindAllMarkers(sce)
+save(degs,file = './output_data/Figure1/deg_clusters.Rdata')
+top20 <- degs %>% group_by(cluster) %>% top_n(20)
+plan(sequential)
+
+
+
+DimPlot(sce,label = T,repel = T)
+
+# 上皮细胞
+epithelial_markers <- c("EPCAM", "KLF5",'MKI67')
+FeaturePlot(sce,epithelial_markers)
+
+
+# 成纤维细胞
+fibroblast_markers <- c("DCN", "COL1A1", "COL3A1")
+FeaturePlot(sce,fibroblast_markers)
+
+# 内皮细胞
+endothelial_markers <- c("PECAM1", "CDH5", "VWF")
+FeaturePlot(sce,endothelial_markers)
+
+
+# 平滑肌细胞
+smooth_muscle_markers <- c("ACTA2", "RGS5")
+FeaturePlot(sce,smooth_muscle_markers)
+
+
+
+# 髓系细胞
+myeloid_markers <- c("CD68", "CSF1R", "CD163", "LYZ")
+FeaturePlot(sce,myeloid_markers)
+
+
+
+# NK/T细胞
+nk_t_markers <- c("NKG7", "CCL5", "GZMA", "CD3G", "CD3E", "CD3D")
+FeaturePlot(sce,nk_t_markers )
+
+
+# 中性粒细胞
+neutrophil_markers <- c("NCF1", "SORL1")
+FeaturePlot(sce,neutrophil_markers)
+
+
+# B细胞
+b_cell_markers <- c("CD19", "BANK1", "MS4A1")
+FeaturePlot(sce,b_cell_markers)
+
+
+# 肥大细胞
+mast_cell_markers <- c("TPSAB1", "CPA3")
+FeaturePlot(sce,mast_cell_markers)
+
+# 浆细胞
+plasma_cell_markers <- c("MZB1", "IGHG1", "IGKC", "IGHG3", "XBP1", "JCHAIN")
+FeaturePlot(sce,plasma_cell_markers)
+
+
+sce_Anno <- RenameIdents(
+  sce,
+  '0' = 'NK/T',
+  '1' = 'neutrophil',
+  '2' = 'NK/T',
+  '3' = 'NK/T',
+  '4' = 'epithelial',
+  '5' = 'epithelial',
+  '6' = 'NK/T',
+  '7' = 'fibroblast',
+  '8' = 'myeloid',
+  '9' = 'NK/T',
+  '10' = 'plasma cell',
+  '11' = 'epithelial',
+  '12' = 'mast cell',
+  '13' = 'epithelial',
+  '14' = 'endothelial',
+  '15' = 'myeloid',
+  '16' = 'NK/T',
+  '17' = 'B cell',
+  '18' = 'epithelial',
+  '19' = 'neutrophil',
+  '20' = 'epithelial',
+  '21' = 'smooth muscle cells',
+  '22' = 'epithelial',
+  '23' = 'epithelial',
+  '24' = 'fibroblast',
+  '25' = 'epithelial',
+  '26' = 'epithelial',
+  '27' = 'epithelial',
+  '28' = 'epithelial',
+  '29' = 'epithelial'
+)
+
+
+# 将身份标识赋值给cell_type
+sce_Anno$cell_type <- Idents(sce_Anno)
+
+# 绘制带标签的UMAP图
+DimPlot(sce_Anno, group.by = 'seurat_clusters', reduction = "umap", label = TRUE)
+
+DimPlot(sce_Anno, group.by = 'cell_type', reduction = "umap", label = TRUE)
+
+qsave(sce_Anno,file = './output_data/Figure1/scRNA_anno.qs')
+
+
+
+
+
+
+
+

@@ -1,0 +1,222 @@
+# ============ 1. Feature Plot =============
+
+#' @title Feature Plot for Single-cell Data
+#' @description This function creates a feature plot for single-cell data using a specified reduction method.
+#' @param scRNA A Seurat object containing single-cell data.
+#' @param feature A character string specifying the feature to be plotted.
+#' @param reduction A character string specifying the reduction method to be used (default is "umap").
+#' @param pt.size A numeric value specifying the size of the points (default is 0.0001).
+#' @param max.cutoff A numeric value specifying the maximum cutoff for the feature values (default is 1.5).
+#' @param cols A vector of colors to be used for the plot (default is `pal2`).
+#' @param title A character string specifying the title of the plot. If NULL, the feature name will be used as the title.
+#' @return A ggplot object representing the feature plot.
+#' @export
+#' @import Seurat
+#' @import ggplot2
+#' @examples
+#' \dontrun{
+#' library(Seurat)
+#' library(ggplot2)
+#'
+#' # Example Seurat object
+#' seurat_obj <- CreateSeuratObject(counts = matrix(rnorm(1000), nrow = 100, ncol = 10))
+#' seurat_obj <- NormalizeData(seurat_obj)
+#' seurat_obj <- FindVariableFeatures(seurat_obj)
+#' seurat_obj <- ScaleData(seurat_obj)
+#' seurat_obj <- RunPCA(seurat_obj)
+#' seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
+#'
+#' # Example feature plot
+#' plot <- scVisFeaturePlot(
+#'   scRNA = seurat_obj,
+#'   feature = "PC_1",
+#'   reduction = "umap",
+#'   pt.size = 0.5,
+#'   max.cutoff = 1.5,
+#'   cols = c("blue", "red"),
+#'   title = NULL
+#' )
+#' print(plot)
+#' }
+
+scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols = pal2, title = NULL) {
+  # Ensure necessary libraries are loaded
+  library(Seurat)
+  library(ggplot2)
+
+  # Set title to feature name if title is NULL
+  if (is.null(title)) {
+    title <- feature
+  }
+
+  # Create the feature plot
+  plot <- FeaturePlot(
+    object = scRNA,
+    features = feature,
+    reduction = reduction,
+    pt.size = pt.size,
+    max.cutoff = max.cutoff,
+    cols = cols
+  ) +
+    scale_x_continuous("") +
+    scale_y_continuous("") +
+    theme_bw() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_blank(),
+      legend.position = "none",
+      plot.title = element_text(hjust = 0.5, size = 14)
+    ) +
+    ggtitle(title)
+
+  return(plot)
+}
+
+# Example usage
+# library(Seurat)
+# library(ggplot2)
+#
+# # Example Seurat object
+# seurat_obj <- CreateSeuratObject(counts = matrix(rnorm(1000), nrow = 100, ncol = 10))
+# seurat_obj <- NormalizeData(seurat_obj)
+# seurat_obj <- FindVariableFeatures(seurat_obj)
+# seurat_obj <- ScaleData(seurat_obj)
+# seurat_obj <- RunPCA(seurat_obj)
+# seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
+#
+# # Example feature plot
+# plot <- scVisFeaturePlot(
+#   scRNA = seurat_obj,
+#   feature = "PC_1",
+#   reduction = "umap",
+#   pt.size = 0.5,
+#   max.cutoff = 1.5,
+#   cols = c("blue", "red"),
+#   title = NULL
+# )
+# print(plot)
+
+
+
+# ============ 2. CPDB Visualization =============
+
+
+#' @title CPDB Visualization
+#' @description This function visualizes the results from CellPhoneDB analysis.
+#' @param sce A Seurat object containing the single-cell RNA data.
+#' @param pvals_path A string specifying the path to the p-values file.
+#' @param means_path A string specifying the path to the means file.
+#' @param decon_path A string specifying the path to the deconvolution file.
+#' @param celltype_key A string specifying the key for cell type in the metadata. Default is "celltype".
+#' @param sender A character vector specifying the sender cell types.
+#' @param receiver A character vector specifying the receiver cell types.
+#' @param output_dir A string specifying the output directory. Default is "./output/".
+#' @param output_filename A string specifying the output filename. Default is "cpdb.pdf".
+#' @param palette1 A character vector specifying the color palette for dot plot. Default is c("darkblue", "yellow", "red").
+#' @param palette2 A character vector specifying the color palette for heatmap. Default is c("navy", "white", "firebrick3").
+#' @return None. The function saves the visualizations in a PDF file.
+#' @export
+#' @import Seurat
+#' @import pheatmap
+#' @import ktplots
+#' @import ggplot2
+#' @examples
+#' \dontrun{
+#' cpdb_visualization(
+#'   sce = seurat_obj,
+#'   pvals_path = "path/to/pvals.txt",
+#'   means_path = "path/to/means.txt",
+#'   decon_path = "path/to/decon.txt",
+#'   sender = c("CellTypeA"),
+#'   receiver = c("CellTypeB"),
+#'   output_dir = "./output_data/",
+#'   output_filename = "cpdb.pdf"
+#' )
+#' }
+
+cpdb_visualization <- function(sce, pvals_path, means_path, decon_path,
+                               celltype_key = "celltype",
+                               sender, receiver,
+                               output_dir = "./output_data/",
+                               output_filename = "cpdb.pdf",
+                               palette1 = c("darkblue", "yellow", "red"),
+                               palette2 = c("navy", "white", "firebrick3")) {
+
+  # Ensure necessary libraries are loaded
+  library(pheatmap)
+  library(ktplots)
+  library(Seurat)
+  library(ggplot2)
+
+  # Create output directory if it doesn't exist
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+
+  # Set up the PDF output
+  pdf(file.path(output_dir, output_filename))
+
+  # Define color palettes
+  my_palette1 <- colorRampPalette(palette1)(n = 100)
+  my_palette2 <- colorRampPalette(palette2)(100)
+
+  # Load data
+  pvals <- read.delim(pvals_path, check.names = FALSE)
+  means <- read.delim(means_path, check.names = FALSE)
+  decon <- read.delim(decon_path, check.names = FALSE)
+
+  # Prepare cell types for plotting
+  cell_type1 <- paste(sender, collapse = '|')
+  cell_type2 <- paste(receiver, collapse = '|')
+
+  # Generate interaction table
+  table <- plot_cpdb(scdata = sce, keep_significant_only = TRUE,
+                     return_table = TRUE,
+                     cell_type1 = cell_type1,
+                     cell_type2 = cell_type2,
+                     celltype_key = celltype_key,
+                     means = means, pvals = pvals)
+
+  # Prepare data for dot plot
+  plot_data1 <- table[c(2:5)]
+  colnames(plot_data1)[1:4] <- c('interacting_pair', 'cell_pairs', 'means', 'pvals')
+  plot_data1$interacting_pair <- str_split(plot_data1$interacting_pair, ">@<>@<>@<", simplify = TRUE)[, 2]
+
+  # Data preprocessing
+  plot_data1$means[is.na(plot_data1$means)] <- 0
+  plot_data1$pvals[is.na(plot_data1$pvals)] <- 1
+
+  # Dot plot
+  plot1 <- ggplot(plot_data1, aes(x = cell_pairs, y = interacting_pair)) +
+    geom_point(aes(size = -log10(pvals), color = means)) +
+    scale_size_continuous(range = c(0, 3), breaks = c(0, 1.0, 2.0)) +
+    scale_color_gradientn('Mean expression', colors = my_palette1, limits = c(0, 1)) +
+    theme_bw() +
+    theme(axis.text = element_text(size = 8, colour = "black"),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0, size = 7),
+          axis.text.y = element_text(size = 7, colour = "black"),
+          axis.title = element_blank(),
+          panel.border = element_rect(size = 0.7, linetype = "solid", colour = "black"))
+
+  print(plot1)
+
+  # Heatmap
+  plot_data2 <- plot_cpdb_heatmap(pvals = pvals, return_tables = TRUE,
+                                  cellheight = 20, cellwidth = 20,
+                                  cluster_cols = FALSE, cluster_rows = FALSE,
+                                  cell_types = unique(sce@meta.data[,celltype_key]))$count_network
+  pheatmap(plot_data2, color = my_palette2,
+           cluster_rows = FALSE, cluster_cols = FALSE,
+           border_color = "white",
+           cellwidth = 30, cellheight = 30)
+
+  # Chord diagram
+  plot_cpdb3(scdata = as.SingleCellExperiment(sce),
+             cell_type1 = cell_type1, cell_type2 = cell_type2,
+             celltype_key = celltype_key, means = means, pvals = pvals,
+             keep_significant_only = TRUE, deconvoluted = decon)
+
+  dev.off()
+}

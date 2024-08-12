@@ -1,0 +1,64 @@
+motif2tfs <- data.table::fread('/home/xiapeng/R_wls2/singularity/pyscenic/cisTarget_db/motifs-v10nr_clust-nr.hgnc-m0.001-o0.0.tbl')
+cisdb <- arrow::read_feather("/home/xiapeng/R_wls2/singularity/pyscenic/cisTarget_db/hg38_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather")
+TFs <- sort(unique(motif2tfs$gene_name))
+qsave(motif2tfs,file = './data/pyscenic_motif2tfs.qs')
+qsave(cisdb,file = './data/pyscenic_cisdb.qs')
+qsave(TFs,file = './data/pyscenic_TFs.qs')
+cisdb.genes <- colnames(cisdb)
+save(cisdb.genes,TFs,file = './data/pyscenic_database.Rdata')
+
+# 上面部分我已经提前准备好，直接加载，请封装后面的为PreparePyscenic,
+# 注意输出文件及文件读入，注意参数解释
+
+load('./data/pyscenic_database.Rdata')
+# 注意：按样本处理!
+seu.list <- SplitObject(seu, split.by = "cell_type")
+names(seu.list)
+for (i in 1:length(names(seu.list))) {
+  seu.list[[i]]@project.name <- names(seu.list)[i]
+}
+names(seu.list)
+
+
+metacells.list <- lapply(seq_along(seu.list), function(ii) {
+  makeMetaCells(
+    seu       = seu.list[[ii]],
+    min.cells = 0, #10
+    reduction = "umap",
+    dims      = 1:2,
+    k.param   = 10,
+    cores     = 10)
+})
+
+
+mc.mat <- lapply(metacells.list, function(mc) mc$mat) %>% Reduce(cbind, .)
+mc.cellmeta <- lapply(metacells.list, function(mc) mc$metadata) %>% Reduce(rbind, .)
+dim(mc.mat)
+saveRDS(mc.mat, "output/00-1.mc.mat.rds")
+
+
+writeLines(TFs, "../cisTarget_db/hsa_hgnc_tfs.motifs-v10.txt")
+
+## (2) meta cell matrix (for step1): *.csv or *.loom
+mc.mat <- readRDS("output/00-1.mc.mat.rds")
+## (2.1) 过滤低表达基因
+expr.in.cells <- rowSums(mc.mat > 0)
+mc.mat <- mc.mat[expr.in.cells >= 5, ]
+
+genes.use <- intersect(colnames(cisdb), rownames(mc.mat))
+length(genes.use)
+dim(mc.mat)
+mc.mat <- mc.mat[genes.use, ]
+
+
+loom <- SCopeLoomR::build_loom(
+  file.name         = "output/00-2.mc_mat_for_step1.loom",
+  dgem              = mc.mat,
+  default.embedding = NULL
+)
+loom$close()
+
+
+
+
+

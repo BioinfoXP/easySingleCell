@@ -1,0 +1,243 @@
+# 2024.03.10
+# PengXia
+
+getwd()
+setwd("/home/shpc_101389/Rstudio/Project/HCC-MVI0115")
+
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(patchwork)
+library(WGCNA)
+library(hdWGCNA)
+library(harmony)
+theme_set(theme_cowplot())
+set.seed(12345)
+
+source('./script/config.R')
+
+
+#==============================--1.读取单细胞数据============
+seurat_obj <- qs::qread('./output_data/scRNA/scRNA_Hepatocytes.qs')
+DimPlot(seurat_obj,label = T,repel = T,group.by = 'cell_type')
+Idents(seurat_obj) <- 'cell_type'
+# VlnPlot(seurat_obj,c('LGALS3','MMP9'))
+#==============================--2.主程序============--#########
+## =====================SetupForWGCNA=====================--#####
+seurat_obj <- SetupForWGCNA(
+  seurat_obj,
+  gene_select = "fraction", # the gene selection approach
+  fraction = 0.05, # fraction of cells that a gene needs to be expressed in order to be included
+  wgcna_name = "hepatocytes" # the name of the hdWGCNA experiment
+)
+
+length(seurat_obj@misc$hepatocytes$wgcna_genes)
+
+
+
+
+##==================- construct metacells  in each group======--#####
+seurat_obj <- MetacellsByGroups(
+  seurat_obj = seurat_obj,
+  group.by = c("cell_type", "group"), # specify the columns in seurat_obj@meta.data to group by
+  k = 25, # nearest-neighbors parameter
+  max_shared = 10, # maximum number of shared cells between two metacells
+  ident.group = 'cell_type' # set the Idents of the metacell seurat object
+)
+
+##============ normalize metacell expression matrix:=========####
+seurat_obj <- NormalizeMetacells(seurat_obj)
+# 
+# seurat_obj@meta.data %>% colnames()
+# meta.data = seurat_obj@meta.data
+# table(meta.data$cell_type)
+
+
+##============ normalize metacell expression matrix:=========####
+seurat_obj <- SetDatExpr(
+  seurat_obj,
+  group_name = "group", # the name of the group of interest in the group.by column
+  # group.by='cell_type', # the metadata column containing the cell type info. This same column should have also been used in MetacellsByGroups
+  assay = 'RNA', # using RNA assay
+  slot = 'data' # using normalized data
+)
+
+
+
+#=====================-Test different soft powers:=========--#####
+seurat_obj <- TestSoftPowers(
+  seurat_obj
+)
+
+#========================--plot the results:============-######
+plot_list <- PlotSoftPowers(seurat_obj)
+
+# assemble with patchwork
+wrap_plots(plot_list, ncol=2)
+export::graph2pdf(file='./output_figure/scRNA/WGCNA-软阈值.pdf',width=8,height=8)
+
+#========================construct co-expression network:=========--#####
+seurat_obj <- ConstructNetwork(
+  seurat_obj, soft_power=9,
+  setDatExpr=FALSE,
+  saveConsensusTOMs = F
+)
+
+qs::qsave(seurat_obj,file = './output_data/scRNA/hdWGCNA_seurat.qs')
+
+PlotDendrogram(seurat_obj, main= 'Plot for hdWGCNA Dendrogram')
+export::graph2pdf(file='./output_figure/scRNA/WGCNA-Dendrogram.pdf',width=8,height=8)
+
+
+
+
+# need to run ScaleData first or else harmony throws an error:
+seurat_obj <- ScaleData(seurat_obj, features=VariableFeatures(seurat_obj))
+
+# compute all MEs in the full single-cell dataset
+seurat_obj <- ModuleEigengenes(
+  seurat_obj,
+  group.by.vars="group"
+) #时间较长
+
+qs::qsave(seurat_obj,file = './output_data/scRNA/hdWGCNA_seurat.qs')
+
+
+# harmonized module eigengenes:
+hMEs <- GetMEs(seurat_obj) #每个细胞对于每个模块的特征值
+head(hMEs)
+
+
+
+
+
+# compute eigengene-based connectivity (kME):
+seurat_obj <- ModuleConnectivity(
+  seurat_obj
+)
+
+
+
+#===============get the module assignment table:=========######
+modules <- GetModules(seurat_obj)
+
+
+
+
+#==================--get hub genes============########
+hub_df <- GetHubGenes(seurat_obj, n_hubs = 500)
+table(hub_df$module)
+openxlsx::write.xlsx(hub_df,file = './output_data/scRNA/hdWGCNA_模块_Hubgenes.xlsx')
+
+# ============-3.保存结果=====================###########
+# This wraps up the critical analysis steps for hdWGCNA, so remember to save your output.
+qs::qsave(seurat_obj,file = './output_data/scRNA/hdWGCNA_seurat.qs')
+
+# ==================--😀前面的过程放linux运行😀======-########
+
+
+seurat_obj = qs::qread('./output_data/scRNA/hdWGCNA_seurat.qs')
+
+# ========================-4.可视化=====================-###########
+
+
+#========================--软阈值============-######
+plot_list <- PlotSoftPowers(seurat_obj)
+
+# assemble with patchwork
+wrap_plots(plot_list, ncol=2)
+export::graph2pdf(file='./output_figure/scRNA/WGCNA-软阈值.pdf',width=8,height=6)
+
+#========================--Dendrogram============-######
+PlotDendrogram(seurat_obj, main= 'Hepatocytes hdWGCNA Dendrogram')
+export::graph2pdf(file='./output_figure/scRNA/WGCNA-Dendrogram.pdf',
+                  width=6,height=4)
+
+
+
+
+
+# ===============4.1 模块相关性=========#########
+ModuleCorrelogram(seurat_obj)
+export::graph2pdf(file='./output_figure/scRNA/WGCNA-模块模块相关.pdf',
+                  width=6,height=6)
+
+
+# get hMEs from seurat object
+MEs <- GetMEs(seurat_obj, harmonized=TRUE)
+mods <- colnames(MEs); mods <- mods[mods != 'grey']
+
+# add hMEs to Seurat meta-data:
+identical(row.names(MEs),colnames(seurat_obj))
+seurat_obj@meta.data <- cbind(seurat_obj@meta.data, MEs)
+
+
+# =====================4.2模块&细胞==================###########
+meta.data = seurat_obj@meta.data
+plot_data = meta.data %>% select(group,unique(colnames(MEs)))
+plot_data = plot_data %>% dplyr::select(-grey) %>% 
+  # filter(cell_type=='Macrophages') %>% 
+  # dplyr::select(-cell_type)
+  group_by(group) %>%
+  summarise(across(.cols = where(is.numeric),.fns = mean)
+  ) %>% 
+  column_to_rownames(var = 'group')
+
+plot_data <- t(scale(t(plot_data),scale = T,center = T))
+pheatmap::pheatmap(plot_data,
+                   cluster_rows = F,cluster_cols = F,fontsize = 14,
+                   color = colorRampPalette(colors = c("blue","white","red"))(100)
+)
+
+export::graph2pdf(file = './output_figure/scRNA/WGCNA-模块&细胞.pdf',
+                  width=6,height=4)
+
+# =====================4.3模块&dotplot==================###########
+### dotplot
+# get hMEs from seurat object
+MEs <- GetMEs(seurat_obj, harmonized=TRUE)
+mods <- colnames(MEs); mods <- mods[mods != 'grey']
+
+# add hMEs to Seurat meta-data:
+seurat_obj@meta.data <- cbind(seurat_obj@meta.data, MEs)
+
+# plot with Seurat's DotPlot function
+p <- DotPlot(seurat_obj, features=mods,group.by = 'group')
+
+# flip the x/y axes, rotate the axis labels, and change color scheme:
+p <- p +
+  coord_flip() +
+  RotatedAxis() +
+  scale_color_gradient2(high='red', mid='grey95', low='blue')
+
+# plot output
+p
+
+
+export::graph2pdf(p,file = './output_figure/scRNA/WGCNA-模块Dotplot.pdf',
+                  width=6,height=4)
+
+
+# =====================4.4模块表达==================###########
+plot_list <- ModuleFeaturePlot(
+  seurat_obj,reduction = 'tsne',
+  module_names = c("turquoise", "black", "brown", "red", "blue", "green"),
+  features='hMEs', # plot the hMEs
+  order=TRUE # order so the points with highest hMEs are on top
+)
+
+
+
+# stitch together with patchwork
+wrap_plots(plot_list)
+
+
+export::graph2pdf(file = './output_figure/scRNA/WGCNA-模块表达.pdf',
+                  width=8,height=6)
+
+clusterCornerAxes(seurat_obj,reduction = 'tsne',cellLabel =
+                    T,clusterCol = 'cell_type')+
+  scale_color_manual(values = pal)
+
+# export::graph2pdf(file = './output_figure/scRNA/Hepatocytes-Tsne.pdf', width = 6, height = 4)
+

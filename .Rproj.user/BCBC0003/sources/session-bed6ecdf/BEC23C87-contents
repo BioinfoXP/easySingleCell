@@ -1,0 +1,471 @@
+# pal <-c('#E5D2DD', '#53A85F', '#F1BB72', '#F3B1A0', '#D6E7A3', '#57C3F3', '#476D87',
+#                  '#E95C59', '#E59CC4', '#AB3282', '#23452F', '#BD956A', '#8C549C', '#585658',
+#                  '#9FA3A8', '#E0D4CA', '#5F3D69', '#C5DEBA', '#58A4C3', '#E4C755', '#F7F398',
+#                  '#AA9A59', '#E63863', '#E39A35', '#C1E6F3', '#6778AE', '#91D0BE', '#B53E2B',
+#                  '#712820', '#DCC1DD', '#CCE0F5',  '#CCC9E6', '#625D9E', '#68A180', '#3A6963',
+#                  '#968175'
+# )
+pal <- c( "#F1788D",  "#54990F","#E6550D","#843C39", "#3182BD","#8C6D31",
+                  "#BD9E39", "#E7BA52", "#31A354", "#E41A1C", "#6BAED6",
+                  "#9ECAE1", "#AD494A", "#A1D99B", "#C7E9C0", "#99600F",
+                  "#C3BC3F", "#D6616B", "#FF7F00", "#1B9E77", "#FDAE6B", 
+                  "#66A61E","#E6550D", "#E7969C",'#53A85F')
+                  
+pal1 <- c('#EFD4B4','#9BCFB9','#F0C0BD','#FB6264','#4E9C99','#70C055','#E98A27','#FEBC28',
+                   "#F1788D",  "#54990F","#E6550D","#843C39","#66A61E","#E6550D", "#E7969C",'#53A85F')
+                   
+
+
+pal2 <-  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080")
+library(data.table)
+library(Seurat)
+library(scRNAtoolVis)
+library(qs)
+library(export)
+library(harmony)
+library(future)
+library(future.apply)
+library(viridis)
+library(paletteer)
+options(future.globals.maxSize = 8000 * 1024^2)
+
+
+
+# 细胞注释
+
+# sce_Anno <- RenameIdents(
+#   sce,
+#   '0' = '',
+#   '1' = '',
+#   '2' = '',
+#   '3' = '',
+#   '4' = '',
+#   '5' = '',
+#   '6' = '',
+#   '7' = '',
+#   '8' = '',
+#   '9' = '',
+#   '10' = '',
+#   '11' = '',
+#   '12' = '',
+#   '13' = '',
+#   '14' = '',
+#   '15' = '',
+#   '16' = '',
+#   '17' = '',
+#   '18' = '',
+#   '19' = '',
+#   '20' = '',
+#   '21' = '',
+#   '22' = '',
+#   '23' = '',
+#   '24' = '',
+#   '25' = '',
+#   '26' = '',
+#   '27' = '',
+#   '28' = ''
+# )
+
+
+
+
+run_normalize <- function(seurat_obj,dims = 1:30){
+  seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 3000)
+  scale_genes <- VariableFeatures(seurat_obj)
+  seurat_obj <- ScaleData(seurat_obj, features = scale_genes)
+  seurat_obj <- RunPCA(seurat_obj, features = scale_genes)
+  scRNA_harmony <- RunHarmony(seurat_obj, group.by.vars = "orig.ident")
+  seurat_obj <- FindNeighbors(scRNA_harmony, dims = dims, reduction = "harmony")
+  seurat_obj <- RunUMAP(seurat_obj, dims = dims, reduction = "harmony") %>% 
+    RunTSNE(., dims = dims, reduction = "harmony")
+}
+
+
+
+feature_plot <- function(data, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols=pal2, title) {
+  plot <- FeaturePlot(
+    object = data,
+    features = feature,
+    reduction = reduction,
+    pt.size = pt.size,
+    max.cutoff = max.cutoff,
+    cols = cols
+  ) +
+    scale_x_continuous("") +
+    scale_y_continuous("") +
+    theme_bw() +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_blank(),
+      legend.position = "none",
+      plot.title = element_text(hjust = 0.5, size = 14)
+    ) +
+    ggtitle(title)
+  
+  return(plot)
+}
+
+
+
+run_normalize <- function(seurat_obj,dims = 1:30){
+  seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 3000)
+  scale_genes <- VariableFeatures(seurat_obj)
+  seurat_obj <- ScaleData(seurat_obj, features = scale_genes)
+  seurat_obj <- RunPCA(seurat_obj, features = scale_genes)
+  scRNA_harmony <- RunHarmony(seurat_obj, group.by.vars = "orig.ident")
+  seurat_obj <- FindNeighbors(scRNA_harmony, dims = dims, reduction = "harmony")
+  seurat_obj <- RunUMAP(seurat_obj, dims = dims, reduction = "harmony")
+}
+
+
+
+
+plot_umap <- function(scdata, reduction = "umap", group.by = 'celltype', label = TRUE, repel = TRUE, pt.size = 0.01, 
+                      cols = c('#6C67AC', '#FDBF6F', '#B49D99', '#9DCAE1', '#E31A1C', '#FF7F00', '#DEEDF9', '#3F93C7', '#CAB2D6')) {
+  # 绘制 UMAP 图
+  Seurat::DimPlot(scdata, reduction = reduction, group.by = group.by, label = label, repel = repel, pt.size = pt.size, cols = cols)
+}
+
+
+
+
+
+create_spatial_plot <- function(RDS, feature = NULL, ad = 1, limits = 1, min.cutoff = 0, 
+                                plot_type = c("feature", "spatial"), title = "") {
+  # 生成颜色调色板
+  viridis_plasma_light_high <- as.vector(x = paletteer_c(palette = "viridis::inferno", n = 250, direction = 1))
+  viridis_plasma_light_high <- c(rep("black", ad), viridis_plasma_light_high)
+  
+  # 设置隐藏轴的主题
+  hide_axis <- theme(axis.title.x = element_blank(),
+                     axis.text.x = element_blank(),
+                     axis.ticks.x = element_blank(),
+                     axis.title.y = element_blank(),
+                     axis.text.y = element_blank(),
+                     axis.ticks.y = element_blank())
+  
+  plot_type <- match.arg(plot_type)
+  
+  if (plot_type == "feature" & !is.null(feature)) {
+    # 生成特征图
+    p <- FeaturePlot(RDS, features = feature, reduction = 'spatial', min.cutoff = min.cutoff)
+    p <- p + theme_void() + theme(
+      axis.ticks = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank(),
+      axis.line = element_blank(),
+      panel.border = element_rect(color = "white", fill = NA, size = 2)
+    ) + scale_y_reverse() +
+      ggtitle(paste0(feature,title)) +
+      DarkTheme() +
+      xlab(NULL) + 
+      ylab(NULL)
+    
+    if (length(limits) == 1) {
+      p <- p + scale_colour_gradientn(colours = viridis_plasma_light_high, na.value = "black")
+    } else {
+      p <- p + scale_colour_gradientn(colours = viridis_plasma_light_high, na.value = "black", limits = limits)
+    }
+    
+    return(p)
+    
+  } else if (plot_type == "spatial") {
+    # 生成空间图
+    p <- SpatialPlot(RDS, repel = FALSE, label = FALSE, image.alpha = 1, alpha = c(0, 0), pt.size.factor = 0.000001) + 
+      geom_point(alpha = 0) +
+      NoLegend() +
+      DarkTheme() +
+      hide_axis + 
+      ggtitle(title) +  
+      theme(text = element_text(size = 14, face = "bold"))
+    
+    return(p)
+  } else {
+    stop("For 'feature' plot type, 'feature' parameter must be provided.")
+  }
+}
+
+
+
+### define function
+Rcpp::sourceCpp(code='
+                
+                #include <Rcpp.h>
+                
+                using namespace Rcpp;
+                
+                // [[Rcpp::export]]
+                
+                IntegerMatrix asMatrix(NumericVector rp,
+                                       
+                                       NumericVector cp,
+                                       
+                                       NumericVector z,
+                                       
+                                       int nrows,
+                                       
+                                       int ncols){
+                  
+                  int k = z.size() ;
+                  
+                  IntegerMatrix  mat(nrows, ncols);
+                  
+                  for (int i = 0; i < k; i++){
+                    
+                    mat(rp[i],cp[i]) = z[i];
+                    
+                  }
+                  
+                  return mat;
+                  
+                }
+                
+                ' )
+
+as_matrix <- function(mat){
+  row_pos <- mat@i
+  col_pos <- findInterval(seq(mat@x)-1,mat@p[-1])
+  tmp <- asMatrix(rp = row_pos, cp = col_pos, z = mat@x,
+                  nrows =  mat@Dim[1], ncols = mat@Dim[2])
+  row.names(tmp) <- mat@Dimnames[[1]]
+  colnames(tmp) <- mat@Dimnames[[2]]
+  return(tmp)
+}
+
+
+
+do.tissueDist <- function(cellInfo.tb = cellInfo.tb,
+                          meta.cluster = cellInfo.tb$meta.cluster,
+                          colname.patient = "patient",
+                          loc = cellInfo.tb$loc,
+                          out.prefix,
+                          pdf.width=3,
+                          pdf.height=5,
+                          verbose=0){
+  ##input data 
+  library(data.table)
+  dir.create(dirname(out.prefix),F,T)
+  
+  cellInfo.tb = data.table(cellInfo.tb)
+  cellInfo.tb$meta.cluster = as.character(meta.cluster)
+  
+  if(is.factor(loc)){
+    cellInfo.tb$loc = loc
+  }else{cellInfo.tb$loc = as.factor(loc)}
+  
+  loc.avai.vec <- levels(cellInfo.tb[["loc"]])
+  count.dist <- unclass(cellInfo.tb[,table(meta.cluster,loc)])[,loc.avai.vec]
+  freq.dist <- sweep(count.dist,1,rowSums(count.dist),"/")
+  freq.dist.bin <- floor(freq.dist * 100 / 10)
+  print(freq.dist.bin)
+  
+  {
+    count.dist.melt.ext.tb <- test.dist.table(count.dist)
+    p.dist.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.value")
+    OR.dist.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="OR")
+    OR.dist.mtx <- as.matrix(OR.dist.tb[,-1])
+    rownames(OR.dist.mtx) <- OR.dist.tb[[1]]
+  }
+  
+  sscVis::plotMatrix.simple(OR.dist.mtx,
+                            out.prefix=sprintf("%s.OR.dist",out.prefix),
+                            show.number=F,
+                            waterfall.row=T,par.warterfall = list(score.alpha = 2,do.norm=T),
+                            exp.name=expression(italic(OR)),
+                            z.hi=4,
+                            palatte=viridis::viridis(7),
+                            pdf.width = 4, pdf.height = pdf.height)
+  if(verbose==1){
+    return(list("count.dist.melt.ext.tb"=count.dist.melt.ext.tb,
+                "p.dist.tb"=p.dist.tb,
+                "OR.dist.tb"=OR.dist.tb,
+                "OR.dist.mtx"=OR.dist.mtx))
+  }else{
+    return(OR.dist.mtx)
+  }
+}
+
+test.dist.table <- function(count.dist,min.rowSum=0)
+{
+  count.dist <- count.dist[rowSums(count.dist)>=min.rowSum,,drop=F]
+  sum.col <- colSums(count.dist)
+  sum.row <- rowSums(count.dist)
+  count.dist.tb <- as.data.frame(count.dist)
+  setDT(count.dist.tb,keep.rownames=T)
+  count.dist.melt.tb <- melt(count.dist.tb,id.vars="rn")
+  colnames(count.dist.melt.tb) <- c("rid","cid","count")
+  count.dist.melt.ext.tb <- as.data.table(ldply(seq_len(nrow(count.dist.melt.tb)), function(i){
+    this.row <- count.dist.melt.tb$rid[i]
+    this.col <- count.dist.melt.tb$cid[i]
+    this.c <- count.dist.melt.tb$count[i]
+    other.col.c <- sum.col[this.col]-this.c
+    this.m <- matrix(c(this.c,
+                       sum.row[this.row]-this.c,
+                       other.col.c,
+                       sum(sum.col)-sum.row[this.row]-other.col.c),
+                     ncol=2)
+    res.test <- fisher.test(this.m)
+    data.frame(rid=this.row,
+               cid=this.col,
+               p.value=res.test$p.value,
+               OR=res.test$estimate)
+  }))
+  count.dist.melt.ext.tb <- merge(count.dist.melt.tb,count.dist.melt.ext.tb,
+                                  by=c("rid","cid"))
+  count.dist.melt.ext.tb[,adj.p.value:=p.adjust(p.value,"BH")]
+  return(count.dist.melt.ext.tb)
+}
+
+
+# 加载必要的包
+library(dplyr)
+library(tidyr)
+library(pheatmap)
+library(viridis)
+
+# 定义主分析函数
+analyze_tissue_dist <- function(meta_data, output_prefix, pdf_width = 8, pdf_height = 4, verbose = 1) {
+  
+  # 调用 do.tissueDist 函数进行主要分析
+  OR_immune_list <- do.tissueDist(cellInfo.tb = meta_data,
+                                  out.prefix = sprintf("%s.Immune_cell", output_prefix),
+                                  pdf.width = pdf_width, pdf.height = pdf_height, verbose = verbose)
+  
+  # 返回分析结果
+  return(OR_immune_list)
+}
+
+# 定义绘图函数
+plot_heatmap <- function(OR_list) {
+  # 提取 OR 值结果
+  a <- OR_list[["OR.dist.tb"]] %>%
+    as.data.frame() %>%
+    column_to_rownames(var = "rid") %>%
+    na.omit()
+  
+  # 提取 P 值结果
+  b <- OR_list$count.dist.melt.ext.tb[, c(1, 2, 6)] %>%
+    spread(key = "cid", value = "adj.p.value") %>%
+    column_to_rownames(var = "rid")
+  
+  # 只选择在a中的行
+  b <- b[rownames(a),]
+  
+  # 调整 P 值符号表示
+  col <- viridis(11, option = "D")
+  b <- ifelse(b >= 0.05 & (a > 1.5 | a < 0.5), "",
+              ifelse(b < 0.0001 & (a > 1.5 | a < 0.5), "****",
+                     ifelse(b < 0.001 & (a > 1.5 | a < 0.5), "***",
+                            ifelse(b < 0.01 & (a > 1.5 | a < 0.5), "**",
+                                   ifelse(b < 0.05 & (a > 1.5 | a < 0.5), "*", "")))))
+  
+  bk <- c(seq(0, 0.99, by = 0.01), seq(1, 2, by = 0.01))
+  
+  # 绘制热图
+  pheatmap(a, border_color = NA, fontsize = 9, cellheight = 12, cellwidth = 20,
+           clustering_distance_rows = "correlation", display_numbers = b,
+           number_color = "black", fontsize_number = 10, cluster_col = FALSE,
+           cluster_rows = TRUE, breaks = bk, treeheight_row = 20, treeheight_col = 20,
+           color = c(colorRampPalette(colors = col[1:6])(length(bk) / 2),
+                     colorRampPalette(colors = col[6:11])(length(bk) / 2)))
+}
+
+
+
+# ======== 绘制monocle2 热图
+generate_branch_enrichment_plot <- function(sce, cell_type_col, branch_point, num_clusters = 3, top_n_markers = 50, 
+                                            cores = 1, pvalue_cutoff = 0.05, topn_enrich = 8, seed = 5201314, 
+                                            num_mark_genes = 25, pdf_path = './output_figure/Figure3/branch-enrich.pdf', 
+                                            pdf_height = 9, pdf_width = 16, plot_type = "both", 
+                                            column_names_rot = 45, show_row_dend = FALSE, 
+                                            markGenes_side = "left", go_colors = jjAnno::useMyCol("calm", n = 3)) {
+  
+  library(org.Hs.eg.db)
+  library(ClusterGVis)
+  library(dplyr)
+  library(scutilsR)
+  library(monocle)
+  library(ggplot2)
+  
+  # 设置细胞类型
+  Idents(sce) <- cell_type_col
+  
+  # 找到所有标记基因
+  cell_marker <- scutilsR::mcFindAllMarkers(sce)
+  
+  # 选择每个cluster的top n个标记基因
+  top <- cell_marker %>% 
+    group_by(cluster) %>% 
+    top_n(n = top_n_markers, wt = avg_log2FC)
+  
+  # 生成分支热图数据
+  df <- plot_genes_branched_heatmap2(mycds[unique(top$Gene.name.uniq),],
+                                     branch_point = branch_point,
+                                     num_clusters = num_clusters,
+                                     cores = cores,
+                                     use_gene_short_name = TRUE,
+                                     show_rownames = TRUE)
+  
+  # 富集分析
+  enrich <- enrichCluster(object = df, OrgDb = org.Hs.eg.db, 
+                          type = "BP", organism = "hsa", 
+                          pvalueCutoff = pvalue_cutoff, topn = topn_enrich, 
+                          seed = seed)
+  
+  # 随机选择标记基因
+  markGenes <- sample(unique(df$wide.res$gene), num_mark_genes, replace = FALSE)
+  
+  # 绘制并保存PDF
+  pdf(pdf_path, height = pdf_height, width = pdf_width, onefile = FALSE)
+  visCluster(object = df, plot.type = plot_type, column_names_rot = column_names_rot, 
+             show_row_dend = show_row_dend, markGenes = markGenes, 
+             markGenes.side = markGenes_side, annoTerm.data = enrich, 
+             go.col = c(rep(go_colors, each = topn_enrich)), 
+             add.bar = TRUE, line.side = markGenes_side)
+  dev.off()
+  
+  # 调用函数示例
+  # generate_branch_enrichment_plot(sce = sce, cell_type_col = 'cell_type', branch_point = 1)
+  
+}
+
+
+# ======== gsea
+run_gsea_analysis <- function(sce, ident1, ident2, logfc_threshold = 0.1, 
+                              gmt_paths = list("./input_data/h.all.v7.4.symbols.gmt", 
+                                               "./input_data/c5.go.bp.v7.4.symbols.gmt", 
+                                               "./input_data/c2.cp.kegg.v7.4.symbols.gmt"), 
+                              pvalue_cutoff = 0.05, p_adjust_method = 'none') {
+  
+  # 设置细胞类型
+  Idents(sce) <- ident1
+  
+  # 找到差异表达基因
+  sce_edg <- FindMarkers(sce, ident.1 = ident1, ident.2 = ident2, logfc.threshold = logfc_threshold)
+  
+  # 添加基因符号
+  sce_edg$SYMBOL <- rownames(sce_edg)
+  names(sce_edg)[2] <- "logFC"
+  sce_edg <- sce_edg %>% arrange(desc(logFC))
+  
+  # 创建基因列表
+  geneList <- sce_edg$logFC 
+  names(geneList) <- sce_edg$SYMBOL 
+  
+  # 读取GMT文件
+  gmt_list <- lapply(gmt_paths, read.gmt)
+  
+  # 运行GSEA分析
+  gsea_results <- lapply(gmt_list, function(gmt) {
+    GSEA(geneList, TERM2GENE = gmt, pvalueCutoff = pvalue_cutoff, pAdjustMethod = p_adjust_method)
+  })
+  
+  # 获取GSEA结果
+  gsea_results_list <- lapply(gsea_results, function(gsea) gsea@result)
+  
+  return(gsea_results_list)
+}

@@ -1,0 +1,197 @@
+source('./script/config.R')
+library(ComplexHeatmap)
+# for (i in 1:12) {
+#   dir.create(paste0('./output_data/','Figure',i))
+#   dir.create(paste0('./output_figure/','Figure',i))
+# }
+
+# ============== 1. Hepatocyte细胞提取 ================
+sce <- qread('./output_data/scRNA/scRNA_Annotated.qs')
+plot_umap(sce,group.by = 'cell_type')
+
+
+
+sce.sub <- subset(sce,cell_type == 'Hepatocyte') %>% 
+  run_normalize() %>% 
+  FindClusters()
+
+plot_umap(sce.sub,group.by = 'group')
+
+graph2pdf(file = './output_figure/Figure2/Hepatocytes_group.pdf',
+          width = 5, height = 4)
+
+qs::qsave(sce.sub,file = './output_data/Figure2/sce_所有Hepatocytes.qs')
+
+# ============== 2. 运行inferCNV ================
+sce.epi <- qread('./output_data/Figure2/sce_所有Hepatocytes.qs')
+dir.create('./output_data/Figure2/inferCNV')
+path <- './output_data/Figure2/inferCNV/'
+
+# refer
+sce.refer <- subset(sce,cell_type %in% c("T/NK", "B Cell")) %>% 
+  run_normalize() %>% 
+  FindClusters()
+# infer
+sce.infer <- merge(sce.epi,sce.refer)%>% 
+  run_normalize() %>% 
+  FindClusters()
+
+qsave(as.matrix(sce.infer[["RNA"]]@counts),file = paste0(path,'infer_run','.qs'))
+write.table(sce.infer$cell_type, file = paste0(path,'infer_run','.cell_type.label.txt')
+            , sep = "\t", quote = F, col.names = F)
+
+
+# run
+gene_order_file <- './output_data/Figure2/inferCNV/hg38_gencode_v27.txt'
+ref_group_names <- c("T/NK", "B Cell")#参考的正常细胞
+name <- 'infer_run'
+
+matrix_counts <- qread(paste0(path,'infer_run','.qs'))
+annotations_file <- paste0(path,'infer_run','.cell_type.label.txt')
+out_path <- paste0(path, name)
+
+library(infercnv)
+infercnv_obj <- CreateInfercnvObject(raw_counts_matrix = matrix_counts,#count矩阵
+                     annotations_file=annotations_file,#cell_type信息
+                     delim="\t",
+                     gene_order_file=gene_order_file,
+                     ref_group_names=ref_group_names,#HC组正常的细胞作为reference
+                     chr_exclude=c("chrY", "chrM"))#选择不需要的染色体，查看帮助函数去除
+
+# 运行 infercnv 分析
+infercnv_obj <- infercnv::run(
+  infercnv_obj,
+  cutoff = 0.1,  # cutoff=1 适用于 Smart-seq2，cutoff=0.1 适用于 10x Genomics
+  out_dir = out_path,  # 分析结果输出文件夹名
+  no_prelim_plot = TRUE,  # 不生成初步绘图
+  cluster_by_groups = TRUE,  # 按组聚类
+  denoise = TRUE,  # 去噪
+  HMM = FALSE,  # 不使用 HMM 模型
+  min_cells_per_gene = 10,  # 每个基因的最少细胞数
+  num_threads = 16,  # 线程数
+  write_expr_matrix = TRUE  # 导出结果表达矩阵
+)
+
+
+
+# ============== 3. inferCNV 聚类及可视化 ================
+infercnv_res <- paste0('./output_data/inferCNV/',name,'/run.final.infercnv_obj')# run.final.infercnv_obj
+gene_order_file <- "./output_data/inferCNV/hg38_gencode_v27.txt"
+ref_cell_name <- c("T/NK", "B Cell")
+obs_cell_name <- c('Hepatocyte')
+
+ref_group <- 'immune'
+obs_group <- 'epi'
+
+
+lapply(1:length(infercnv_res),function(i){
+  
+  # InferCNV运行结果
+  infercnv_obj <- read_rds(infercnv_res[i])
+  expr <- infercnv_obj@expr.data
+  
+  #染色体注释信息
+  gene_pos <- read.delim(gene_order_file, header = F)
+  gene_pos <- gene_pos[gene_pos$V1 %in% rownames(expr),]
+  new_cluster <- unique(gene_pos$V2)
+  
+  top_color <- HeatmapAnnotation(cluster = anno_block(labels = gsub("chr", "", new_cluster),
+                                                      gp = gpar(col = "white"),
+                                                      labels_gp = gpar(cex = 1, col = "black"),
+                                                      height = unit(5,"mm"))) 
+  
+  
+  #提取reference cell位置
+  ref_cell <- c(infercnv_obj@reference_grouped_cell_indices[ref_cell_name][[1]])
+  obs_cell <- c(infercnv_obj@observation_grouped_cell_indices[obs_cell_name][[1]])
+  cell_anno =data.frame(cell_id =c(colnames(expr)[ref_cell],colnames(expr)[obs_cell]),
+                        group =c(rep(ref_group,length(ref_cell)),rep(obs_group,length(obs_cell)))
+  )
+  
+  
+  
+  set.seed(123)
+  kmeans.result <- kmeans(t(expr), 5)
+  kmeans_df <- data.frame(kmeans.result$cluster)
+  colnames(kmeans_df) <- "k_cluster"
+  kmeans_df <- as_tibble(cbind(cell_id = rownames(kmeans_df), kmeans_df))
+  kmeans_df=kmeans_df%>%inner_join(cell_anno,by="cell_id")%>%arrange(k_cluster)
+  kmeans_df$k_cluster=as.factor(kmeans_df$k_cluster) 
+  
+  #注释
+  annotation_row = data.frame(
+    k_cluster =kmeans_df$k_cluster,
+    group = kmeans_df$group)
+  
+  row.names(annotation_row) <- kmeans_df$cell_id
+  saveRDS(annotation_row,file = paste0('./output_data/inferCNV/',name,'/Kmeans.rds')[i])
+  
+  
+  color_cluster=c("#E69F00","#56B4E9","#009E73","#F0E442","#0072B2","#843C39")
+  names(color_cluster)=as.character(1:6)
+  
+  left_anno <- rowAnnotation(df = annotation_row,
+                             col=list(group = eval(parse(text = paste0("c(", ref_group, "='#00A0877F',", obs_group, "='#E64B357F')"))),
+                                      k_cluster=color_cluster),
+                             show_annotation_name = F)
+  # eval(parse(text = paste0("c(", ref_group, "='#00A0877F',", obs_group, "='#E64B357F')")))
+  #绘制热图
+  pdf(paste0(path,name,'/CNV_heatmap.pdf')[i],width = 9.5,height = 4)
+  ht = Heatmap(t(log2(expr))[rownames(annotation_row),],
+               col = colorRamp2::colorRamp2(c(-0.5,0,0.5), c("#2166ac","white","#b2182b")),
+               cluster_rows = F,
+               cluster_columns = F,
+               show_column_names = F,
+               show_row_names = F,
+               column_split = factor(gene_pos$V2, new_cluster),
+               heatmap_legend_param = list(title = "inferCNV",
+                                           direction = "vertical",
+                                           title_position = "leftcenter-rot",
+                                           legend_height = unit(3, "cm")),
+               
+               left_annotation = left_anno, 
+               row_title = NULL,
+               column_title = NULL,
+               top_annotation = top_color,
+               border = T)
+  draw(ht, heatmap_legend_side = "right")
+  dev.off()
+})
+
+
+
+# ================ 4.提取标记肿瘤细胞===================
+sample_tumor_k1 <- c(1,2,3,4,5)
+k_check <- list(sample_tumor_k1)
+files <- paste0('./output_data/inferCNV/',name,'/Kmeans.rds');files
+
+tumor.table <- lapply(1:length(files), function(i){
+  kmeans_res <- read_rds(files[i])
+  tumor.table <- kmeans_res %>% 
+    filter(group == 'epi') %>%
+    mutate(cell_type = ifelse(.$k_cluster%in%k_check[[i]],'tumor_cell','normal_cell'))
+  message(table(tumor.table$group,tumor.table$cell_type))
+  return(tumor.table)
+})
+tumor.table <- Reduce(rbind,tumor.table)
+table(sce$cell_type,sce$orig.ident)
+dim(tumor.table)
+table(tumor.table$cell_type)
+table(tumor.table$k_cluster)
+openxlsx::write.xlsx(rownames_to_column(tumor.table,var = 'id'),file = './output_data/tumor.table.xlsx')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

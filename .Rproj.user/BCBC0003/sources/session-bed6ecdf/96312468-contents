@@ -1,0 +1,60 @@
+# Date: 2024-02-26
+# Author: PengXia
+
+# Load required libraries
+library(Seurat)
+library(tidyverse)
+library(parallel)
+library(scRNAtoolVis)
+library(clusterProfiler)
+library(export)
+library(ggpubr)
+
+# Set working directory and source configuration
+setwd(here::here())
+source('./script/config.R')
+
+# Define paths
+path1 <- "/home/xiapeng/R_wls2/cervix_cancer/"
+path2 <- "/home/xiapeng/R_wls2/singularity/pyscenic/cervix_cancer/"
+
+# Load single-cell data
+sce <- qread(file.path(path1, 'output_data/Figure5/sce.tumor.qs'))
+
+# Load and process regulon information
+source(file.path(path2, "R/compute_module_score.R"))
+regulons <- read.gmt(file.path(path2, "output/02-cervix-cancer.regulons.gmt"))
+regulon.list <- split(regulons$gene, sub("[0-9]+g", "\\+", regulons$term))
+saveRDS(regulon.list, file.path(path2, "output/03-1.cervix_cancer.regulons.rds"))
+
+# Compute regulon activity scores and UMAP
+DefaultAssay(sce) <- 'RNA'
+sce <- ComputeModuleScore(sce, regulon.list, min.size = 10, cores = 15)
+DefaultAssay(sce) <- "AUCell"
+sce <- RunUMAP(sce, features = rownames(sce), metric = "correlation", reduction.name = "umapRAS", reduction.key = "umapRAS_")
+
+# Visualize UMAP plots for cell types
+p1 <- DimPlot(sce, reduction = "umap", group.by = "cell_type", cols = pal, label = TRUE, repel = TRUE) + theme(legend.position = 'none')
+p2 <- DimPlot(sce, reduction = "umapRAS", group.by = "cell_type", cols = pal, label = TRUE, repel = TRUE) + theme(legend.position = 'none')
+export::graph2pdf(p1 + p2, file = file.path(path1, 'output_figure/Figure6/Pyscenic_Umap.pdf'), width = 8, height = 4)
+
+# Calculate PCA using RAS matrix and visualize
+sce <- ScaleData(sce)
+sce <- RunPCA(sce, features = rownames(sce), reduction.name = "pcaRAS", reduction.key = "pcaRAS_")
+VizDimLoadings(sce, reduction = "pcaRAS", dims = 2, balanced = TRUE, projected = FALSE)
+VlnPlot(sce, group.by = "cell_type", features = "ATF4(+)", split.by = "group", pt.size = 0, split.plot = TRUE, sort = FALSE, cols = c("blue", "red")) + ylab("TF activity")
+
+# Perform variance decomposition
+save(sce, file = file.path(path2, 'output/sce.Rdata'))
+source(file.path(path2, "R/variance_decompose.R"))
+load(file.path(path2, 'output/sce.Rdata'))
+vd.vars <- 'cell_type'
+meta.data <- sce@meta.data[, vd.vars, drop = FALSE]
+meta.data$cell_type <- factor(meta.data$cell_type)
+ras.data <- FetchData(sce, vars = rownames(sce))
+vd.res <- VarDecompose(data = ras.data, meta.data = meta.data, vd.vars = vd.vars, cores = 5)
+saveRDS(vd.res, file.path(path2, "output/04-1.VD_res.rds"))
+
+
+# Save updated Seurat object
+qs::qsave(sce, file = file.path(path1, 'output_data/Figure6/sce.tumor.pyscenic.qs'))

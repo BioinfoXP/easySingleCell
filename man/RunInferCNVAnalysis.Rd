@@ -14,11 +14,11 @@ RunInferCNVAnalysis(
 )
 }
 \arguments{
-\item{infercnv_path}{Path to the saved InferCNV results.}
+\item{infercnv_path}{Path to the previous prepared saved InferCNV results. eg: './output_data', please don't use './output_data/'.}
 
-\item{gene_order_file}{Path to the gene order file.}
+\item{gene_order_file}{Path to the gene order file. It will provided by this package default.}
 
-\item{ref_group_names}{Reference group names for normal cells.}
+\item{ref_group_names}{A vector for reference group names for normal cells.}
 
 \item{name}{Name for the InferCNV run.}
 
@@ -42,7 +42,7 @@ prepared_data <- PrepareDataForInferCNV(
   sce_epi = sce_epi,
   sce_refer = sce_refer,
   celltype = 'cell_type',
-  infercnv_path = './output_data/Figure2/inferCNV/',
+  infercnv_path = './output_data/inferCNV/',
   name = 'infer_run'
 )
 
@@ -54,5 +54,14 @@ infercnv_obj <- RunInferCNVAnalysis(
   name = prepared_data$name,
   num_threads = 16
 )
+
+# Please check your input! This function will do the followings:
+# Load data for InferCNV
+# matrix_counts: path to the .qs file containing the raw counts matrix
+# annotations_file: path to the .txt file containing cell type annotations
+# out_path: directory to save the output of the InferCNV analysis
+# matrix_counts <- qread(paste0(infercnv_path, '/', name, '.qs'))
+# annotations_file <- paste0(infercnv_path, '/', name, '.celltype.label.txt')
+# out_path <- paste0(infercnv_path, '/', name)
 }
 }

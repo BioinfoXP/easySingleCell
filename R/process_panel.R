@@ -1644,7 +1644,7 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 
   # Save count matrix and cell type labels
   qsave(as.matrix(sce_infer[["RNA"]]@counts), file = paste0(infercnv_path, name, '.qs'))
-  write.table(sce_infer@meta.data[, celltype], file = paste0(infercnv_path, name, '.cell_type.label.txt'),
+  write.table(sce_infer@meta.data[, celltype], file = paste0(infercnv_path, name, '.celltype.label.txt'),
               sep = "\t", quote = FALSE, col.names = FALSE)
 
   return(list(sce_infer = sce_infer, infercnv_path = infercnv_path, name = name))
@@ -1659,9 +1659,9 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 #'
 #' This function performs InferCNV analysis on the prepared single-cell expression data.
 #'
-#' @param infercnv_path Path to the saved InferCNV results.
-#' @param gene_order_file Path to the gene order file.
-#' @param ref_group_names Reference group names for normal cells.
+#' @param infercnv_path Path to the previous prepared saved InferCNV results. eg: './output_data', please don't use './output_data/'.
+#' @param gene_order_file Path to the gene order file. It will provided by this package default.
+#' @param ref_group_names A vector for reference group names for normal cells.
 #' @param name Name for the InferCNV run.
 #' @param num_threads Number of threads to use for the analysis.
 #' @return The InferCNV object containing the analysis results.
@@ -1680,7 +1680,7 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 #'   sce_epi = sce_epi,
 #'   sce_refer = sce_refer,
 #'   celltype = 'cell_type',
-#'   infercnv_path = './output_data/Figure2/inferCNV/',
+#'   infercnv_path = './output_data/inferCNV/',
 #'   name = 'infer_run'
 #' )
 #'
@@ -1692,6 +1692,15 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 #'   name = prepared_data$name,
 #'   num_threads = 16
 #' )
+#'
+#' # Please check your input! This function will do the followings:
+#' # Load data for InferCNV
+#' # matrix_counts: path to the .qs file containing the raw counts matrix
+#' # annotations_file: path to the .txt file containing cell type annotations
+#' # out_path: directory to save the output of the InferCNV analysis
+#' # matrix_counts <- qread(paste0(infercnv_path, '/', name, '.qs'))
+#' # annotations_file <- paste0(infercnv_path, '/', name, '.celltype.label.txt')
+#' # out_path <- paste0(infercnv_path, '/', name)
 #' }
 RunInferCNVAnalysis <- function(infercnv_path = './output_data',
                                 gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
@@ -1703,7 +1712,7 @@ RunInferCNVAnalysis <- function(infercnv_path = './output_data',
   # annotations_file: path to the .txt file containing cell type annotations
   # out_path: directory to save the output of the InferCNV analysis
   matrix_counts <- qread(paste0(infercnv_path, '/', name, '.qs'))
-  annotations_file <- paste0(infercnv_path, '/', name, '.cell_type.label.txt')
+  annotations_file <- paste0(infercnv_path, '/', name, '.celltype.label.txt')
   out_path <- paste0(infercnv_path, '/', name)
 
   # Create InferCNV object
@@ -1787,11 +1796,20 @@ RunInferCNVAnalysis <- function(infercnv_path = './output_data',
 #'   out_path = "./output_data/inferCNV/"
 #' )
 #' }
-RunInferCNVCluster <- function(infercnv_obj, gene_order_file, ref_cell_name, obs_cell_name, ref_group, obs_group,
-                                        k_clusters = 5, heatmap_colors = c("#2166ac", "white", "#b2182b"),
-                                        cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
+RunInferCNVCluster <- function(infercnv_obj, gene_order_file= system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
+                               ref_cell_name, obs_cell_name, ref_group, obs_group,
+                                        k_clusters = 6, heatmap_colors = c("#2166ac", "white", "#b2182b"),
+                                        cluster_colors =c("#E69F00","#56B4E9","#009E73","#F0E442","#0072B2","#843C39"),
                                         out_path) {
-  expr <- infercnv_obj@expr.data
+
+  # Check if k_clusters equals length of cluster_colors
+  if (k_clusters != length(cluster_colors)) {
+    stop("The number of clusters (k_clusters) must be equal to the length of cluster_colors.")
+  }
+
+
+
+   expr <- infercnv_obj@expr.data
 
   # Load gene position information
   gene_pos <- read.delim(gene_order_file, header = FALSE)
@@ -1804,8 +1822,8 @@ RunInferCNVCluster <- function(infercnv_obj, gene_order_file, ref_cell_name, obs
                                                       height = unit(5, "mm")))
 
   # Extract reference and observed cell positions
-  ref_cell <- c(infercnv_obj@reference_grouped_cell_indices[[ref_cell_name]][[1]])
-  obs_cell <- c(infercnv_obj@observation_grouped_cell_indices[[obs_cell_name]][[1]])
+  ref_cell <- c(infercnv_obj@reference_grouped_cell_indices[ref_cell_name][[1]])
+  obs_cell <- c(infercnv_obj@observation_grouped_cell_indices[obs_cell_name][[1]])
   cell_anno <- data.frame(cell_id = c(colnames(expr)[ref_cell], colnames(expr)[obs_cell]),
                           group = c(rep(ref_group, length(ref_cell)), rep(obs_group, length(obs_cell))))
 
@@ -1910,7 +1928,7 @@ RunInferCNVCluster <- function(infercnv_obj, gene_order_file, ref_cell_name, obs
 #'
 #' # Example usage:
 #' # Run the full InferCNV pipeline
-#' results <- RunInferCNVPipeline(
+#' results <- runInferCNVPipeline(
 #'   sce_epi = sce_epi,
 #'   sce_refer = sce_refer,
 #'   celltype = 'celltype',
@@ -1927,7 +1945,7 @@ RunInferCNVCluster <- function(infercnv_obj, gene_order_file, ref_cell_name, obs
 #'   num_threads = 16
 #' )
 #' }
-RunInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
+runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
                                     infercnv_path = './output_data', name = 'infer_run',
                                     gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                     ref_group_names,
@@ -1935,6 +1953,11 @@ RunInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
                                     k_clusters = 5, heatmap_colors = c("#2166ac", "white", "#b2182b"),
                                     cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
                                     num_threads = 12) {
+
+  # Check if k_clusters equals length of cluster_colors
+  if (k_clusters != length(cluster_colors)) {
+    stop("The number of clusters (k_clusters) must be equal to the length of cluster_colors.")
+  }
 
   # Step 1: Prepare Data for InferCNV
   prepared_data <- PrepareDataForInferCNV(
@@ -1970,4 +1993,3 @@ RunInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
 
   return(list(infercnv_obj = infercnv_obj, clustering_results = clustering_results))
 }
-

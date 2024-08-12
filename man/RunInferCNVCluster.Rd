@@ -6,12 +6,13 @@
 \usage{
 RunInferCNVCluster(
   infercnv_obj,
-  gene_order_file,
+  gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package =
+    "easySingleCell"),
   ref_cell_name,
   obs_cell_name,
   ref_group,
   obs_group,
-  k_clusters = 5,
+  k_clusters = 6,
   heatmap_colors = c("#2166ac", "white", "#b2182b"),
   cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
   out_path

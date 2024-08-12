@@ -61,7 +61,7 @@ PrepareCpdb <- function(scRNA, output_dir = './output_data/', celltype_column = 
 
 #' @title Prepare Data for Cell2loc
 #' @description This function prepares data for Cell2loc analysis by exporting counts matrix, UMAP embeddings, and metadata from a Seurat object.
-#' @param input_file A character string specifying the path to the Seurat object file.
+#' @param scRNA A Seurat object.
 #' @param output_dir A character string specifying the directory to save the output files. Default is "output_data".
 #' @param prefix A character string specifying the prefix to be added to the output file names. Default is "".
 #' @return NULL
@@ -73,16 +73,13 @@ PrepareCpdb <- function(scRNA, output_dir = './output_data/', celltype_column = 
 #' PrepareCell2loc(input_file = './output_data/Figure11/sce.tumor.所有细胞注释.qs', output_dir = 'output_data', prefix = 'Figure12_')
 #' }
 
-PrepareCell2loc <- function(input_file, output_dir = "output_data", prefix = "") {
+PrepareCell2loc <- function(scRNA, output_dir = "output_data", prefix = "") {
   # Load required libraries
   library(Seurat)
   library(qs)
 
   # Ensure the output directory exists
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-
-  # Load the Seurat object
-  scRNA <- qread(input_file)
 
   # Export counts matrix
   counts_matrix <- t(as.matrix(scRNA@assays$RNA@counts))
@@ -156,8 +153,9 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 #' @title Prepare Data for pySCENIC Analysis
 #' @description This function prepares the data for pySCENIC analysis by splitting the Seurat object by cell type, creating meta cells, and generating the necessary files for pySCENIC.
 #' @param scRNA A Seurat object containing single-cell RNA data.
+#' @param celltype A character string to split the Seurat object by cell type. Default is "celltype"
 #' @param output_dir A character string specifying the output directory where results will be saved. Default is './output_data/'.
-#' @param min_cells An integer specifying the minimum number of cells for meta cell creation. Default is 0.
+#' @param min_cells An integer specifying the minimum number of cells for meta cell creation. Default is 10.
 #' @param reduction A character string specifying the reduction method to use. Default is 'umap'.
 #' @param dims A numeric vector specifying the dimensions to use for the reduction. Default is 1:2.
 #' @param k_param An integer specifying the k parameter for meta cell creation. Default is 10.
@@ -174,7 +172,7 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 #' PreparePyscenic(
 #'   scRNA = scRNA,
 #'   output_dir = './output_data/',
-#'   min_cells = 0,
+#'   min_cells = 10,
 #'   reduction = 'umap',
 #'   dims = 1:2,
 #'   k_param = 10,
@@ -182,7 +180,7 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 #' )
 #' }
 
-PreparePyscenic <- function(scRNA, output_dir = './output_data/', min_cells = 0, reduction = 'umap', dims = 1:2, k_param = 10, cores = 10) {
+PreparePyscenic <- function(scRNA,celltype='celltype', output_dir = './output_data/', min_cells = 10, reduction = 'umap', dims = 1:2, k_param = 10, cores = 10) {
   # Load necessary libraries
   library(Seurat)
   library(magrittr)
@@ -194,7 +192,7 @@ PreparePyscenic <- function(scRNA, output_dir = './output_data/', min_cells = 0,
   load(system.file("data", "pyscenic_database.Rdata", package = "easySingleCell"))
 
   # Split the Seurat object by cell type
-  seu.list <- SplitObject(scRNA, split.by = "celltype")
+  seu.list <- SplitObject(scRNA, split.by = celltype)
   for (i in 1:length(names(seu.list))) {
     seu.list[[i]]@project.name <- names(seu.list)[i]
   }
@@ -249,3 +247,226 @@ PreparePyscenic <- function(scRNA, output_dir = './output_data/', min_cells = 0,
 #   k_param = 10,
 #   cores = 10
 # )
+
+
+# =========== 4. ProcessPyscenic =============
+#' Calculate gene module scores
+#'
+#' @param x gene expression matrix, rows are genes, columns are cells. Can be any format, UMI, CPM, TPM, etc.
+#' @param ... Arguments passed to other methods.
+#' @return A signature score matrix or Seurat object.
+#'
+#' @export
+ComputeModuleScore <- function(x, ...) UseMethod('ComputeModuleScore')
+
+
+#' @param gene.sets a list of gene sets in data.frame or named list.
+#' @param min.size The minimal genes of the gene sets. The size of gene sets less than this value were ignored.  Default: 20
+#' @param batch.size The number of cells were calculated for each batch. Default: 500
+#' @param cores number of threads for parallel computing. Default: 1
+#'
+#' @rdname ComputeModuleScore
+#' @export
+ComputeModuleScore.default <- function(x, gene.sets, min.size=20, batch.size=500, cores=1, ...) {
+  if (!is.list(gene.sets)) {
+    stop("'gene.sets' should be a list or data.frame!")
+  }
+  gene.sets <- gene.sets[sapply(gene.sets, length) >= min.size]
+  n.cells <- ncol(x)
+  batches <- floor((1:n.cells-1) / batch.size)
+  batch.levels <- unique(batches)
+  aucell <- function(i) {
+    dge.tmp <- x[, batches == i]
+    cr <- AUCell::AUCell_buildRankings(dge.tmp, nCores=1, plotStats=F, verbose = F)
+    auc <- AUCell::AUCell_calcAUC(gene.sets, cr, nCores=1, verbose = F)
+    AUCell::getAUC(auc)
+  }
+  auc_scores <- parallel::mclapply(batch.levels, aucell, mc.cores = cores)
+  do.call(cbind, auc_scores)
+}
+
+
+#' @rdname ComputeModuleScore
+#' @param assay Name of the seurat object assay.
+#' @export
+ComputeModuleScore.Seurat <- function(x, gene.sets, min.size=20, batch.size=500, cores=1, assay = Seurat::DefaultAssay(x), ...) {
+  dge <- x[[assay]]@counts
+  ras_mat <- ComputeModuleScore.default(x = dge, gene.sets, min.size, batch.size, cores)
+  x[["AUCell"]] <- Seurat::CreateAssayObject(data = ras_mat)
+  return(x)
+}
+
+
+library(magrittr)
+
+#' Find Differential Expressed Genes via Variance Deomposition using Mixed Linear Model
+#' @param data A data.frame or matrix of gene expression matrix
+#' @param meta.data A data.frame contains cell meta data
+#' @param vd.vars variable in meta.data for variance decomposition.
+#' @param genes Genes for variance decomposition. Default: "all"
+#' @param cores The number of threads for calculation, -1 means all available
+#' threads. Default: -1
+#'
+#' @return A data.frame contains the results of variance decomposition.
+#' @export
+#'
+VarDecompose <- function(data, meta.data, vd.vars, genes = "all", cores = -1) {
+  ## check params
+  if (missing(data) || missing(meta.data) || missing(vd.vars)) {
+    stop("Must provide 'data', 'meta.data', and 'vd.vars'.")
+  }
+  if (is.null(colnames(meta.data)) || is.null(rownames(meta.data)) ) {
+    stop("The row and column names of 'meta.data' should be provided.")
+  }
+  if (is.null(colnames(data)) || is.null(rownames(data)) ) {
+    stop("The row and column names of 'data' should be provided.")
+  }
+  if (!all(rownames(data) == rownames(meta.data)) ) {
+    stop("The row names of 'data' and 'meta.data' should be matched.")
+  }
+  if (!all(vd.vars %in% colnames(meta.data))) {
+    vd.vars.404 <- setdiff(vd.vars, colnames(meta.data))
+    stop(paste("vd.vars:", vd.vars.404, "is(are) not found in 'meta.data'"))
+  }
+  if (length(genes) == 1) {
+    if (genes == "all") {
+      genes <- colnames(data)
+    } else {
+      stop("'genes' should be 'all' or a vector.")
+    }
+  } else {
+    genes.404 <- setdiff(genes, colnames(data))
+    if (length(genes.404) > 0) {
+      warning(paste(length(genes.404), "gene(s) are not found in 'data'."))
+      genes <- setdiff(genes, genes.404)
+    }
+  }
+  cores <- ifelse(cores > 0, cores, parallel::detectCores())
+  ## prepare data for VD
+  vd.vars.str <- sapply(vd.vars, function(xx) sprintf("(1|%s)", xx))
+  modelFormulaStr <- paste("expression ~", paste(vd.vars.str, collapse = "+"))
+  data.use <- cbind(data[, genes], meta.data)
+  ## exe VD
+  vd.res <- do.call(rbind, parallel::mclapply(genes, function(genename) {
+    data.model <- data.use[, c(vd.vars, genename)]
+    colnames(data.model) <- c(vd.vars, "expression")
+    tryCatch({
+      model <- suppressWarnings(lme4::lmer(stats::as.formula(modelFormulaStr), data = data.model, REML = TRUE, verbose = FALSE))
+      results <- as.data.frame(lme4::VarCorr(model))
+      rownames(results) <- results$grp
+      results <- results[c(vd.vars, "Residual"), ]
+      frac.var <- results$vcov / sum(results$vcov)
+
+      res.tmp <- c("OK", frac.var)
+    },
+    error = function(e) {
+      print(e)
+      res.tmp <- c("FAIL", rep(-1, length(vd.vars)+1))
+    })
+    names(res.tmp) <- c("status", vd.vars, "residual")
+    as.data.frame(as.list(res.tmp)) # return
+  }, mc.cores = cores)
+  )
+  rownames(vd.res) <- genes
+  vd.res %<>% as.data.frame()
+  vd.res <- vd.res %>% dplyr::mutate(gene = rownames(vd.res), .before=1)
+  # vd.res <- vd.res %>% as.data.frame() %>% dplyr::mutate(gene = rownames(.), .before=1)
+  for (i in 3:ncol(vd.res)) {
+    vd.res[[i]] %<>% as.numeric()
+  }
+  return(vd.res)
+}
+
+
+
+
+# process_scenic.R
+
+#' Process SCENIC Output and Compute Module Scores
+#'
+#' This function processes the output from SCENIC, computes module scores, and performs dimensionality reduction.
+#'
+#' @param sce Seurat object containing the single-cell data.
+#' @param inputdir Path to the input directory containing the SCENIC output files. Ignored if `regulons` is provided.
+#' @param outputdir Path to the output directory where results will be saved. If not specified, defaults to the input directory.
+#' @param gmtfile Name of the GMT file containing regulons. Ignored if `regulons` is provided.
+#' @param regulons A list of regulons. If provided, `inputdir` and `gmtfile` are ignored.
+#' @param min.size Minimum size of the regulons to be considered. Default is 10.
+#' @param cores Number of cores to use for computation. Default is 15.
+#' @param vd.vars Variable for variance decomposition. Default is 'celltype'.
+#' @param prefix Prefix to add to the output file names. Default is "03-1".
+#'
+#' @return None. The function outputs files to the specified directory.
+#' @import Seurat
+#' @import AUCell
+#' @import dplyr
+#' @import future
+#' @import furrr
+#' @import readr
+#' @import tidyr
+#' @import clusterProfiler
+#' @import qs
+#' @export
+ProcessPyscenic <- function(sce,
+                            inputdir = NULL,
+                            outputdir = inputdir,
+                            gmtfile = NULL,
+                            regulons = NULL,
+                            min.size = 10,
+                            cores = 15,
+                            vd.vars = 'celltype',
+                            prefix = "03-1") {
+  # Check if regulons are provided
+  if (is.null(regulons)) {
+    if (is.null(inputdir) || is.null(gmtfile)) {
+      stop("Either 'regulons' must be provided, or both 'inputdir' and 'gmtfile' must be specified.")
+    }
+
+    # Check if the input file exists
+    gmt_path <- file.path(inputdir, gmtfile)
+    if (!file.exists(gmt_path)) {
+      stop("GMT file not found: ", gmt_path)
+    }
+
+    # Read GMT file
+    regulons <- read.gmt(gmt_path)
+  }
+
+  # Create regulon list
+  regulon.list <- split(regulons$gene, sub("[0-9]+g", "\\+", regulons$term))
+
+  # Save regulon list
+  regulon_rds_path <- file.path(outputdir, paste0(prefix, ".regulons.rds"))
+  saveRDS(regulon.list, regulon_rds_path)
+
+  # Set the default assay of the Seurat object
+  DefaultAssay(sce) <- 'RNA'
+
+  # Compute module scores
+  sce <- ComputeModuleScore(sce, regulon.list, min.size = min.size, cores = cores)
+
+  # Set the default assay of the Seurat object to AUCell
+  DefaultAssay(sce) <- "AUCell"
+
+  # Run UMAP
+  sce <- RunUMAP(sce, features = rownames(sce), metric = "correlation", reduction.name = "umapRAS", reduction.key = "umapRAS_")
+
+  # Compute PCA and visualize
+  sce <- ScaleData(sce)
+  sce <- RunPCA(sce, features = rownames(sce), reduction.name = "pcaRAS", reduction.key = "pcaRAS_")
+
+  # Variance decomposition
+  meta.data <- sce@meta.data[, vd.vars, drop = FALSE]
+  meta.data[, vd.vars] <- factor(meta.data[, vd.vars])
+  ras.data <- FetchData(sce, vars = rownames(sce))
+  vd.res <- VarDecompose(data = ras.data, meta.data = meta.data, vd.vars = vd.vars, cores = cores)
+
+  # Save variance decomposition results
+  vd_res_path <- file.path(outputdir, paste0("04-1.VD_res.rds"))
+  saveRDS(vd.res, vd_res_path)
+
+  # Save Seurat object
+  sce_rds_path <- file.path(outputdir, paste0(prefix, ".sce.qs"))
+  qsave(sce, sce_rds_path)
+}
+

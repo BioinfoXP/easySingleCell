@@ -6,8 +6,9 @@
 \usage{
 PreparePyscenic(
   scRNA,
+  celltype = "celltype",
   output_dir = "./output_data/",
-  min_cells = 0,
+  min_cells = 10,
   reduction = "umap",
   dims = 1:2,
   k_param = 10,
@@ -17,9 +18,11 @@ PreparePyscenic(
 \arguments{
 \item{scRNA}{A Seurat object containing single-cell RNA data.}
 
+\item{celltype}{A character string to split the Seurat object by cell type. Default is "celltype"}
+
 \item{output_dir}{A character string specifying the output directory where results will be saved. Default is './output_data/'.}
 
-\item{min_cells}{An integer specifying the minimum number of cells for meta cell creation. Default is 0.}
+\item{min_cells}{An integer specifying the minimum number of cells for meta cell creation. Default is 10.}
 
 \item{reduction}{A character string specifying the reduction method to use. Default is 'umap'.}
 
@@ -40,7 +43,7 @@ This function prepares the data for pySCENIC analysis by splitting the Seurat ob
 PreparePyscenic(
   scRNA = scRNA,
   output_dir = './output_data/',
-  min_cells = 0,
+  min_cells = 10,
   reduction = 'umap',
   dims = 1:2,
   k_param = 10,

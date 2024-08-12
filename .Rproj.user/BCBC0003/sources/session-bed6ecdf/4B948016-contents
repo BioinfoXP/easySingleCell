@@ -254,12 +254,12 @@ library(viridis)
 analyze_tissue_dist <- function(meta_data, output_prefix, pdf_width = 8, pdf_height = 4, verbose = 1) {
 
   # 调用 do.tissueDist 函数进行主要分析
-  OR_immune_list <- do.tissueDist(cellInfo.tb = meta_data,
+  OR_list <- do.tissueDist(cellInfo.tb = meta_data,
                                   out.prefix = sprintf("%s.Immune_cell", output_prefix),
                                   pdf.width = pdf_width, pdf.height = pdf_height, verbose = verbose)
 
   # 返回分析结果
-  return(OR_immune_list)
+  return(OR_list)
 }
 
 # 定义绘图函数
@@ -333,7 +333,7 @@ scVisTissueOR <- function(scRNA, group = 'orig.ident', celltype = 'celltype', ou
   meta$meta.cluster <- meta[, celltype]
 
   # Perform tissue OR analysis
-  OR_immune_list <- analyze_tissue_dist(meta_data = meta, output_prefix = output_prefix)
+  OR_list <- analyze_tissue_dist(meta_data = meta, output_prefix = output_prefix)
 
   # Ensure the output directory exists
   dir.create(output_prefix, showWarnings = FALSE, recursive = TRUE)
@@ -342,10 +342,10 @@ scVisTissueOR <- function(scRNA, group = 'orig.ident', celltype = 'celltype', ou
   # Plot heatmap
   # Export the plot to a PDF file
   pdf(file = paste0(output_prefix, output_file), width = width, height = height)
-  plot_heatmap(OR_immune_list)
+  plot_heatmap(OR_list)
   dev.off()
 
-  return(OR_immune_list)
+  return(OR_list)
 }
 
 # Example usage

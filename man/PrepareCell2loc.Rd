@@ -4,10 +4,10 @@
 \alias{PrepareCell2loc}
 \title{Prepare Data for Cell2loc}
 \usage{
-PrepareCell2loc(input_file, output_dir = "output_data", prefix = "")
+PrepareCell2loc(scRNA, output_dir = "output_data", prefix = "")
 }
 \arguments{
-\item{input_file}{A character string specifying the path to the Seurat object file.}
+\item{scRNA}{A Seurat object.}
 
 \item{output_dir}{A character string specifying the directory to save the output files. Default is "output_data".}
 

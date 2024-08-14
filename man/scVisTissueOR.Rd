@@ -8,8 +8,8 @@ scVisTissueOR(
   scRNA,
   group = "orig.ident",
   celltype = "celltype",
-  output_prefix = "./output_figure",
-  output_file = "/tissue_OR.pdf",
+  output_dir = "./output_figure",
+  output_file = "tissue_OR.pdf",
   width = 5,
   height = 4
 )
@@ -21,9 +21,9 @@ scVisTissueOR(
 
 \item{celltype}{A character string specifying the cell type variable in the metadata. Default is 'celltype'.}
 
-\item{output_prefix}{A character string specifying the prefix for output files. Default is "./output_figure".}
+\item{output_dir}{A character string specifying the prefix for output files. Default is "./output_figure".}
 
-\item{output_file}{A character string specifying the output file name. Default is "/tissue_OR.pdf".}
+\item{output_file}{A character string specifying the output file name. Default is "tissue_OR.pdf".}
 
 \item{width}{Numeric value specifying the width of the output plot. Default is 5.}
 
@@ -38,6 +38,6 @@ This function performs tissue odds ratio analysis and plots the results.
 \examples{
 \dontrun{
 # Assuming `sce` is a pre-existing Seurat object
-scVisTissueOR(sce, group = "group", celltype = "celltype", output_prefix = "./output_figure")
+scVisTissueOR(sce, group = "group", celltype = "celltype", output_dir = "./output_figure", output_file = "tissue_OR.pdf", width = 5, height = 4)
 }
 }

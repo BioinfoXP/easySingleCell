@@ -29,3 +29,19 @@ A list containing the merged single-cell expression data and the path to saved f
 \description{
 This function prepares the single-cell expression data for InferCNV analysis.
 }
+\examples{
+\dontrun{
+# Ensure necessary libraries are loaded
+library(infercnv)
+library(qs)
+# Example usage:
+# Prepare data using a custom function
+prepared_data <- PrepareDataForInferCNV(
+  sce_epi = sce_epi,
+  sce_refer = sce_refer,
+  celltype = 'celltype',
+  infercnv_path = './output_data/inferCNV/',
+  name = 'infer_run'
+)}
+
+}

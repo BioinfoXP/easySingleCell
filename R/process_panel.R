@@ -522,7 +522,7 @@ runCogapsAnalysis <- function(scRNA, nPatterns = 3, out_dir = './output_data/cog
 
 
 
-# ========= 9. runCogapsAnalysis =========
+# ========= 9. runMonocleAnalysis =========
 
 #' Process scRNA Data with Monocle
 #'

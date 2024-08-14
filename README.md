@@ -21,7 +21,7 @@ BiocManager::install("Mfuzz")
 devtools::install_github("PaulingLiu/ROGUE")
 devtools::install_github("junjunlab/ClusterGVis")
 devtools::install_github("jokergoo/ComplexHeatmap")
-devtools::install_github("BioinfoXP/easySingleCell")
+remotes::install_github("BioinfoXP/easySingleCell",upgrade = F,dependencies = F)
 ```
 
 # TCGAPanel: A Comprehensive Tool for TCGA Data Analysis

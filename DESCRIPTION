@@ -28,3 +28,14 @@ Imports:
     ComplexHeatmap,
     SummarizedExperiment
 biocViews: clusterProfiler,org.Hs.eg.db,SummarizedExperiment
+Collate: 
+    'Creat_Project.R'
+    'Internal.R'
+    'TCGA_panel.R'
+    'color_panel.R'
+    'generics.R'
+    'import.R'
+    'plot_panel.R'
+    'prepare_panel.R'
+    'process_panel.R'
+    'scVisual_panel.R'

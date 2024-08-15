@@ -47,13 +47,13 @@ package_data <- list(
       BiocManager::install("ComplexHeatmap")
     }
   ),
-    "SeuratDisk" = list(
-      website = "https://github.com/mojaveazure/seurat-disk",
-      tutorial = "https://github.com/mojaveazure/seurat-disk",
-      install_info = 'remotes::install_github("mojaveazure/seurat-disk")',
-      install = function(){
-        remotes::install_github("mojaveazure/seurat-disk")
-      }
+  "SeuratDisk" = list(
+    website = "https://github.com/mojaveazure/seurat-disk",
+    tutorial = "https://github.com/mojaveazure/seurat-disk",
+    install_info = 'remotes::install_github("mojaveazure/seurat-disk")',
+    install = function(){
+      remotes::install_github("mojaveazure/seurat-disk")
+    }
   ),
   "DelayedArray" = list(
     website = "https://bioconductor.org/packages/release/bioc/html/DelayedArray.html",
@@ -100,4 +100,3 @@ import <- function(package, hpc.mode = F, detach = F){
   library(package, character.only = T)
   if(detach) detach(paste0("package:",package), unload = TRUE, character.only = T)
 }
-

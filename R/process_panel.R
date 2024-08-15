@@ -2301,7 +2301,180 @@ biomartConvertGeneral <- function(
 }
 
 
+# ================ 16.import scenic loom ======
+#' @rdname adata.Load
+#' @export
 
+Seu2Loom <- function(
+    seu,
+    filename,
+    add.normdata = FALSE,
+    add.metadata = TRUE,
+    layers = NULL,
+    overwrite = FALSE
+) {
+  library(hdf5r)
+  library(Seurat)
+  library(tools)
+
+  # Check file extension and modify filename if needed
+  if (!grepl(pattern = "^loom$", x = file_ext(x = filename))) {
+    filename <- paste0(filename, ".loom")
+  }
+
+  # Check if file exists and handle according to 'overwrite' parameter
+  if (file.exists(filename)) {
+    if (isTRUE(x = overwrite)) {
+      warning("Overwriting previous file ", filename,
+              call. = FALSE, immediate. = TRUE)
+      file.remove(filename)
+    }
+    else {
+      stop("Loom file at ", filename, " already exists",
+           call. = FALSE)
+    }
+  }
+
+  # Check dimensions of layers
+  if (!is.null(layers)) {
+    seu_dim <- dim(seu)
+    for (layer_name in names(layers)) {
+      layer_matrix <- layers[[layer_name]]
+      if (!all(seu_dim == rev(dim(layer_matrix)))) {
+        stop(paste("The dimensions of the", layer_name, "layer do not match the transposed dimensions of the Seurat object. The Seurat object has", seu_dim[2], "cells and", seu_dim[1], "features. Please adjust the", layer_name, "layer matrix to have", seu_dim[2], "rows (cells) and", seu_dim[1], "columns (features) and try again."))
+      }
+    }
+  }
+
+  # Create a string datatype object with UTF-8 encoding
+  utf8_string_type <- H5T_STRING$new(size = Inf)$set_cset(cset = h5const$H5T_CSET_UTF8)
+
+  # Open a new HDF5 file
+  file <- H5File$new(filename, mode = "w")
+
+  # Create and set attributes
+  file$create_group("attrs")
+  file[["attrs"]]$create_dataset("LOOM_SPEC_VERSION", "3.0.0", dtype = utf8_string_type)
+
+  # Create necessary groups
+  row_attrs <- file$create_group("row_attrs")
+  col_attrs <- file$create_group("col_attrs")
+  file$create_group("col_graphs")
+  file$create_group("row_graphs")
+  layers_group <- file$create_group("layers")
+
+  # Extract count matrix and transpose to have cells as rows and genes as columns
+  count_matrix <- t(as.matrix(GetAssayData(seu, slot = "counts")))
+
+  # If add.normdata is TRUE, extract normalized data and set it as the main matrix
+  if (isTRUE(add.normdata)) {
+    norm_matrix <- t(as.matrix(GetAssayData(seu, slot = "data")))
+    file$create_dataset("matrix", norm_matrix)
+    layers_group$create_dataset("counts", count_matrix)
+  } else {
+    # Create the main matrix dataset with count matrix
+    file$create_dataset("matrix", count_matrix)
+  }
+
+  # Add cell IDs to col_attrs group
+  cells <- colnames(seu)
+  col_attrs$create_dataset("CellID", cells, dtype = utf8_string_type)
+
+  # Add gene names to row_attrs group
+  genes <- rownames(seu)
+  row_attrs$create_dataset("Gene", genes, dtype = utf8_string_type)
+
+  # Add cell metadata to col_attrs group
+  if(isTRUE(add.metadata)) {
+    meta_data <- seu@meta.data
+    for (colname in colnames(meta_data)) {
+      # Convert factor columns to character
+      if (is.factor(meta_data[[colname]])) {
+        meta_data[[colname]] <- as.character(meta_data[[colname]])
+      }
+      # Add dataset to col_attrs group
+      if (is.character(meta_data[[colname]])) {
+        col_attrs$create_dataset(colname, meta_data[[colname]], dtype = utf8_string_type)
+      } else {
+        col_attrs$create_dataset(colname, meta_data[[colname]])
+      }
+    }
+  }
+
+  # Add layers to the "layers" group
+  if (!is.null(layers)) {
+    for (layer_name in names(layers)) {
+      layers_group$create_dataset(layer_name, layers[[layer_name]])
+    }
+  }
+
+  # Close the file
+  file$close_all()
+}
+
+
+
+
+
+
+
+#' @title Import SCENIC Loom Files into Seurat
+#' @description Imports SCENIC-generated loom files into Seurat objects for further analysis. This function allows the integration of gene regulatory network insights directly into the Seurat environment. If a Seurat object is specified, results are stored in `seu@misc$SCENIC` and a new 'TF' assay is created; if not, a list containing Regulons and RegulonsAUC is returned.
+#' @param loom.path Path to the SCENIC-generated loom file.
+#' @param seu Optional Seurat object. If specified, the SCENIC data (regulons and their activities) are imported directly into the object, facilitating further analyses. If not provided, the function returns a list containing the regulons and their activity matrices. Default: NULL.
+#' @return If a Seurat object is provided, the function returns the modified Seurat object with SCENIC data integrated. If no Seurat object is provided, a list with two elements is returned: `Regulons` containing the regulons and their gene lists, and `RegulonsAUC` containing the activity matrix of these regulons.
+#' @details This function is designed to ease the integration of SCENIC analysis into Seurat workflows, allowing users to explore and visualize transcription factor activities and their regulatory impacts on gene expression within their familiar Seurat analysis pipeline. The integration involves adding a new 'TF' assay for the regulon activity and storing detailed regulon information in the object's `misc` slot.
+#' @examples
+#' # Example of importing a SCENIC loom file with an existing Seurat object
+#' library(SeuratExtend)
+#' scenic_loom_path <- file.path(tempdir(), "pyscenic_integrated-output.loom")
+#' download.file("https://zenodo.org/records/10944066/files/pbmc3k_small_pyscenic_integrated-output.loom", scenic_loom_path)
+#' pbmc <- ImportPyscenicLoom(scenic_loom_path, seu = pbmc)
+#'
+#' # Example without an existing Seurat object
+#' scenic_output <- ImportPyscenicLoom(scenic_loom_path)
+#'
+#' # Accessing the SCENIC data in a Seurat object
+#' tf_auc <- pbmc@misc$SCENIC$RegulonsAUC
+#' head(tf_auc, 3:4)
+#' tf_gene_list <- pbmc@misc$SCENIC$Regulons
+#' head(tf_gene_list, 5)
+#'
+#' @rdname ImportPyscenicLoom
+#' @export
+
+ImportPyscenicLoom <- function(loom.path, seu = NULL) {
+  library(Seurat)
+  import("loomR")
+
+  lfile <- connect(loom.path, skip.validate = T)
+  if(is.null(seu)) {} else if(length(lfile$col.attrs$CellID[]) != length(colnames(seu))) {
+    stop("Loom file and Seurat object have different cell numbers")
+  }else if(!identical(lfile$col.attrs$CellID[], colnames(seu))){
+    warning("Loom file and Seurat object have the same cell numbers but different cell names")
+  }
+
+  RegulonsAUC <- lfile$col.attrs$RegulonsAUC[]
+  colnames(RegulonsAUC) <- sub("_(+)", "", colnames(RegulonsAUC), fixed = T)
+  rownames(RegulonsAUC) <- lfile$col.attrs$CellID[]
+
+  Regulons <- lfile$row.attrs$Regulons[]
+  colnames(Regulons) <- sub("_(+)", "", colnames(Regulons), fixed = T)
+  genes <- lfile$row.attrs$Gene
+  Regulons <- apply(Regulons, 2, function(x) genes[which(x==1)])
+
+  lfile$close_all()
+  results <- list(RegulonsAUC = RegulonsAUC,
+                  Regulons = Regulons)
+
+  if(is.null(seu)) {
+    return(results)
+  } else {
+    seu@misc[["SCENIC"]] <- results
+    seu[["TF"]] <- CreateAssayObject(data = t(RegulonsAUC))
+    return(seu)
+  }
+}
 
 
 

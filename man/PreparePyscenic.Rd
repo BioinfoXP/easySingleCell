@@ -8,6 +8,7 @@ PreparePyscenic(
   scRNA,
   celltype = "celltype",
   output_dir = "./output_data/",
+  use_MetaCell = FALSE,
   min_cells = 10,
   reduction = "umap",
   dims = 1:2,
@@ -18,9 +19,11 @@ PreparePyscenic(
 \arguments{
 \item{scRNA}{A Seurat object containing single-cell RNA data.}
 
-\item{celltype}{A character string to split the Seurat object by cell type. Default is "celltype"}
+\item{celltype}{A character string to split the Seurat object by cell type. Default is "celltype".}
 
 \item{output_dir}{A character string specifying the output directory where results will be saved. Default is './output_data/'.}
+
+\item{use_MetaCell}{A logical value indicating whether to use MetaCell. Default is FALSE.}
 
 \item{min_cells}{An integer specifying the minimum number of cells for meta cell creation. Default is 10.}
 
@@ -36,7 +39,8 @@ PreparePyscenic(
 None. The function saves the meta cell matrix and other necessary files for pySCENIC analysis in the specified output directory.
 }
 \description{
-This function prepares the data for pySCENIC analysis by splitting the Seurat object by cell type, creating meta cells, and generating the necessary files for pySCENIC.
+This function prepares the data for pySCENIC analysis by splitting the Seurat object by cell type,
+creating meta cells, and generating the necessary files for pySCENIC.
 }
 \examples{
 \dontrun{

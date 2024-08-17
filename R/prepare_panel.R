@@ -150,11 +150,15 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 
 
 
-#' @title Prepare Data for pySCENIC Analysis
-#' @description This function prepares the data for pySCENIC analysis by splitting the Seurat object by cell type, creating meta cells, and generating the necessary files for pySCENIC.
+#' Prepare Data for pySCENIC Analysis
+#'
+#' This function prepares the data for pySCENIC analysis by splitting the Seurat object by cell type,
+#' creating meta cells, and generating the necessary files for pySCENIC.
+#'
 #' @param scRNA A Seurat object containing single-cell RNA data.
-#' @param celltype A character string to split the Seurat object by cell type. Default is "celltype"
+#' @param celltype A character string to split the Seurat object by cell type. Default is "celltype".
 #' @param output_dir A character string specifying the output directory where results will be saved. Default is './output_data/'.
+#' @param use_MetaCell A logical value indicating whether to use MetaCell. Default is FALSE.
 #' @param min_cells An integer specifying the minimum number of cells for meta cell creation. Default is 10.
 #' @param reduction A character string specifying the reduction method to use. Default is 'umap'.
 #' @param dims A numeric vector specifying the dimensions to use for the reduction. Default is 1:2.
@@ -179,8 +183,9 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 #'   cores = 10
 #' )
 #' }
-
-PreparePyscenic <- function(scRNA,celltype='celltype', output_dir = './output_data/', min_cells = 10, reduction = 'umap', dims = 1:2, k_param = 10, cores = 10) {
+PreparePyscenic <- function(scRNA, celltype = 'celltype', output_dir = './output_data/',
+                            use_MetaCell = FALSE, min_cells = 10, reduction = 'umap',
+                            dims = 1:2, k_param = 10, cores = 10) {
   # Load necessary libraries
   library(Seurat)
   library(magrittr)
@@ -188,54 +193,60 @@ PreparePyscenic <- function(scRNA,celltype='celltype', output_dir = './output_da
   library(arrow)
   library(SCopeLoomR)
 
-  # Load pre-prepared data
-  load(system.file("data", "pyscenic_database.Rdata", package = "easySingleCell"))
+  # Check if use_MetaCell is TRUE
+  if (use_MetaCell) {
+    easySingleCell::Seu2Loom(seu = scRNA, filename = paste0(output_dir, "00-2.mc_mat_for_step1"), overwrite = TRUE)
+  } else {
+    # Load pre-prepared data
+    load(system.file("data", "pyscenic_database.Rdata", package = "easySingleCell"))
 
-  # Split the Seurat object by cell type
-  seu.list <- SplitObject(scRNA, split.by = celltype)
-  for (i in 1:length(names(seu.list))) {
-    seu.list[[i]]@project.name <- names(seu.list)[i]
-  }
+    # Split the Seurat object by cell type
+    seu.list <- SplitObject(scRNA, split.by = celltype)
+    for (i in seq_along(seu.list)) {
+      seu.list[[i]]@project.name <- names(seu.list)[i]
+    }
 
-  # Create meta cells for each cell type
-  metacells.list <- lapply(seq_along(seu.list), function(ii) {
-    makeMetaCells(
-      seu       = seu.list[[ii]],
-      min.cells = min_cells,
-      reduction = reduction,
-      dims      = dims,
-      k.param   = k_param,
-      cores     = cores
+    # Create meta cells for each cell type
+    metacells.list <- lapply(seq_along(seu.list), function(ii) {
+      makeMetaCells(
+        seu       = seu.list[[ii]],
+        min.cells = min_cells,
+        reduction = reduction,
+        dims      = dims,
+        k.param   = k_param,
+        cores     = cores
+      )
+    })
+
+    # Combine meta cell matrices and metadata
+    mc.mat <- lapply(metacells.list, function(mc) mc$mat) %>% Reduce(cbind, .)
+    mc.cellmeta <- lapply(metacells.list, function(mc) mc$metadata) %>% Reduce(rbind, .)
+
+    # Save the meta cell matrix
+    dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+    saveRDS(mc.mat, file.path(output_dir, "00-1.mc.mat.rds"))
+
+    # Read the saved meta cell matrix
+    mc.mat <- readRDS(file.path(output_dir, "00-1.mc.mat.rds"))
+
+    # Filter low expression genes
+    expr.in.cells <- rowSums(mc.mat > 0)
+    mc.mat <- mc.mat[expr.in.cells >= 5, ]
+
+    # Intersect genes with cisDB
+    genes.use <- intersect(cisdb.genes, rownames(mc.mat))
+    mc.mat <- mc.mat[genes.use, ]
+
+    # Create a loom file for pySCENIC
+    loom <- SCopeLoomR::build_loom(
+      file.name         = file.path(output_dir, "00-2.mc_mat_for_step1.loom"),
+      dgem              = mc.mat,
+      default.embedding = NULL
     )
-  })
-
-  # Combine meta cell matrices and metadata
-  mc.mat <- lapply(metacells.list, function(mc) mc$mat) %>% Reduce(cbind, .)
-  mc.cellmeta <- lapply(metacells.list, function(mc) mc$metadata) %>% Reduce(rbind, .)
-
-  # Save the meta cell matrix
-  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-  saveRDS(mc.mat, file.path(output_dir, "00-1.mc.mat.rds"))
-
-  # Read the saved meta cell matrix
-  mc.mat <- readRDS(file.path(output_dir, "00-1.mc.mat.rds"))
-
-  # Filter low expression genes
-  expr.in.cells <- rowSums(mc.mat > 0)
-  mc.mat <- mc.mat[expr.in.cells >= 5, ]
-
-  # Intersect genes with cisDB
-  genes.use <- intersect(cisdb.genes, rownames(mc.mat))
-  mc.mat <- mc.mat[genes.use, ]
-
-  # Create a loom file for pySCENIC
-  loom <- SCopeLoomR::build_loom(
-    file.name         = file.path(output_dir, "00-2.mc_mat_for_step1.loom"),
-    dgem              = mc.mat,
-    default.embedding = NULL
-  )
-  loom$close()
+    loom$close()
+  }
 }
+
 
 # Example usage
 # PreparePyscenic(

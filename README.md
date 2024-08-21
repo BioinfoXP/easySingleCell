@@ -21,6 +21,8 @@ BiocManager::install("Mfuzz")
 devtools::install_github("PaulingLiu/ROGUE")
 devtools::install_github("junjunlab/ClusterGVis")
 devtools::install_github("jokergoo/ComplexHeatmap")
+devtools::install_github("xmc811/Scillus", ref = "development")
+
 remotes::install_github("BioinfoXP/easySingleCell",upgrade = F,dependencies = F)
 remotes::install_github("FertigLab/CoGAPS")
 ```

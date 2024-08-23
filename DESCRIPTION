@@ -1,6 +1,6 @@
 Package: easySingleCell
 Title: This is an R package to fast the bioinformatics analysis for single cell
-Version: 0.0.1
+Version: 0.0.2
 Authors@R: 
     person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))

@@ -7,7 +7,8 @@
 runHdWGCNAStep3(
   sce,
   output_figure_dir = "./output_figure/",
-  output_data_dir = "./output_data/"
+  output_data_dir = "./output_data/",
+  n_hubs = 50
 )
 }
 \arguments{
@@ -16,6 +17,8 @@ runHdWGCNAStep3(
 \item{output_figure_dir}{A character string specifying the directory to save output figures.}
 
 \item{output_data_dir}{A character string specifying the directory to save output data files.}
+
+\item{n_hubs}{An integer specifying the number of hub genes to extract and save.}
 }
 \value{
 None. The function saves plots and hub genes to the specified directories.
@@ -31,7 +34,8 @@ and saving hub genes to a CSV file.
 runHdWGCNAStep3(
   sce = sce,
   output_figure_dir = './output_figure/',
-  output_data_dir = './output_data/'
+  output_data_dir = './output_data/',
+  n_hubs = 50
 )
 }
 }

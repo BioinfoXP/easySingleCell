@@ -1160,6 +1160,7 @@ runHdWGCNAStep2 <- function(sce,
 #' @param sce A Seurat object after hdWGCNA step 2.
 #' @param output_figure_dir A character string specifying the directory to save output figures.
 #' @param output_data_dir A character string specifying the directory to save output data files.
+#' @param n_hubs An integer specifying the number of hub genes to extract and save.
 #' @return None. The function saves plots and hub genes to the specified directories.
 #' @export
 #' @import Seurat
@@ -1172,10 +1173,11 @@ runHdWGCNAStep2 <- function(sce,
 #' runHdWGCNAStep3(
 #'   sce = sce,
 #'   output_figure_dir = './output_figure/',
-#'   output_data_dir = './output_data/'
+#'   output_data_dir = './output_data/',
+#'   n_hubs = 50
 #' )
 #' }
-runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/') {
+runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', n_hubs = 50) {
   # Load necessary libraries
   library(Seurat)
   library(patchwork)
@@ -1188,7 +1190,7 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
   dir.create(output_data_dir, showWarnings = FALSE, recursive = TRUE)
 
   # Plot hdWGCNA Dendrogram
-  pdf(file = file.path(output_figure_dir, "Hdwgcna_dendrogram.pdf"), width = 8, height = 8)
+  pdf(file = file.path(output_figure_dir, "Hdwgcna_dendrogram.pdf"), width = 8, height = 6)
   PlotDendrogram(sce, main = "hdWGCNA Dendrogram")
   dev.off()
 
@@ -1236,17 +1238,10 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
   sce <- qread(file.path(output_data_dir, "sce_hdWGCNA_step2.qs"))
 
   # Get hub genes and save to file
-  hub_df <- GetHubGenes(sce, n_hubs = 50)
+  hub_df <- GetHubGenes(sce, n_hubs = n_hubs)
   hub_file <- file.path(output_data_dir, "hdWGCNA_hub_genes.csv")
   write.csv(hub_df, file = hub_file, row.names = FALSE)
 }
-
-
-
-
-
-
-
 
 
 

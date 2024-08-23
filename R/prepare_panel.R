@@ -194,7 +194,7 @@ PreparePyscenic <- function(scRNA, celltype = 'celltype', output_dir = './output
   library(SCopeLoomR)
 
   # Check if use_MetaCell is TRUE
-  if (use_MetaCell) {
+  if (!use_MetaCell) {
     easySingleCell::Seu2Loom(seu = scRNA, filename = paste0(output_dir, "00-2.mc_mat_for_step1"), overwrite = TRUE)
   } else {
     # Load pre-prepared data

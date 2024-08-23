@@ -6,25 +6,25 @@
 \usage{
 runScMetabolismAnalysis(
   scRNA,
-  output_file = "./output_data/Figure4/scMetabolism.Rdata",
-  pdf_file = "./output_figure/Figure2/scMetabolism.pdf",
+  output_file = "./output_data/scMetabolism.Rdata",
+  pdf_file = "./output_figure/scMetabolism.pdf",
   npathways = 20,
-  cell_type_column = "cell_type",
+  cell_type_column = "celltype",
   width = 6,
   height = 10,
-  method = "VISION"
+  method = "AUCell"
 )
 }
 \arguments{
 \item{scRNA}{A Seurat object containing the single-cell RNA-seq data.}
 
-\item{output_file}{Path to the output Rdata file for saving the Seurat object with metabolism scores. Default is './output_data/Figure4/scMetabolism.Rdata'.}
+\item{output_file}{Path to the output Rdata file for saving the Seurat object with metabolism scores. Default is './output_data/scMetabolism.Rdata'.}
 
-\item{pdf_file}{Path to the output PDF file for saving the DotPlot. Default is './output_figure/Figure2/scMetabolism.pdf'.}
+\item{pdf_file}{Path to the output PDF file for saving the DotPlot. Default is './output_figure/scMetabolism.pdf'.}
 
 \item{npathways}{Number of top pathways to plot. Default is 20.}
 
-\item{cell_type_column}{Column name in the Seurat object metadata representing cell types. Default is "cell_type".}
+\item{cell_type_column}{Column name in the Seurat object metadata representing cell types. Default is "celltype".}
 
 \item{width}{Width of the output PDF. Default is 6.}
 

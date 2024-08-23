@@ -223,10 +223,10 @@ MarkDoubletsWrapper <- function(seu, PCs = 1:10, split.by = "orig.ident") {
 #' @title Perform Metabolism Analysis and Generate DotPlot
 #' @description This function performs metabolism analysis on Seurat object data and generates a DotPlot of metabolic pathways.
 #' @param scRNA A Seurat object containing the single-cell RNA-seq data.
-#' @param output_file Path to the output Rdata file for saving the Seurat object with metabolism scores. Default is './output_data/Figure4/scMetabolism.Rdata'.
-#' @param pdf_file Path to the output PDF file for saving the DotPlot. Default is './output_figure/Figure2/scMetabolism.pdf'.
+#' @param output_file Path to the output Rdata file for saving the Seurat object with metabolism scores. Default is './output_data/scMetabolism.Rdata'.
+#' @param pdf_file Path to the output PDF file for saving the DotPlot. Default is './output_figure/scMetabolism.pdf'.
 #' @param npathways Number of top pathways to plot. Default is 20.
-#' @param cell_type_column Column name in the Seurat object metadata representing cell types. Default is "cell_type".
+#' @param cell_type_column Column name in the Seurat object metadata representing cell types. Default is "celltype".
 #' @param width Width of the output PDF. Default is 6.
 #' @param height Height of the output PDF. Default is 10.
 #' @param method Method for metabolism score calculation. Default is "VISION".
@@ -246,13 +246,13 @@ MarkDoubletsWrapper <- function(seu, PCs = 1:10, split.by = "orig.ident") {
 #' }
 
 runScMetabolismAnalysis <- function(scRNA,
-                                    output_file = './output_data/Figure4/scMetabolism.Rdata',
-                                    pdf_file = './output_figure/Figure2/scMetabolism.pdf',
+                                    output_file = './output_data/scMetabolism.Rdata',
+                                    pdf_file = './output_figure/scMetabolism.pdf',
                                     npathways = 20,
-                                    cell_type_column = "cell_type",
+                                    cell_type_column = "celltype",
                                     width = 6,
                                     height = 10,
-                                    method = "VISION") {
+                                    method = "AUCell") {
 
   library(scMetabolism)
   library(Seurat)
@@ -358,7 +358,7 @@ runScGSEA <- function(scRNA, ident1, ident2, logfc_threshold = 0.1,
   # Get GSEA results
   gsea_results_list <- lapply(gsea_results, function(gsea) gsea@result)
 
-  return(list(gsea_results_list, sce_edg))
+  return(list(gsea_results,gsea_results_list, sce_edg))
 }
 
 # Example call
@@ -1062,7 +1062,7 @@ runHdWGCNAStep1 <- function(sce,
 # ================== 12. runHdWGCNAStep2 ===========
 #' @title Perform HdWGCNA Analysis Step 2
 #' @description This function performs the second step of HdWGCNA analysis on a Seurat object, including constructing the co-expression network, plotting KME, extracting hub genes, and generating a DotPlot for hMEs.
-#' @param sce A Seurat object containing scRNA-seq data.
+#' @param sce A Seurat object after hdWGCNA step 1.
 #' @param soft_power An integer specifying the soft power value for constructing the co-expression network.
 #' @param name A character string specifying the name of the experiment, used for naming the topological overlap matrix written to disk. Default is "HdWGCNA".
 #' @param group_by A character string specifying the metadata column to group by in the DotPlot.
@@ -1137,39 +1137,8 @@ runHdWGCNAStep2 <- function(sce,
   print(dendrogram_plot)
   dev.off()
 
-  # Plot genes ranked by kME for each module
-  kme_file <- file.path(output_dir, "hdWGCNA_kme_plot.pdf")
-  pdf(kme_file, width = 12, height = 4)
-  kme_plot <- PlotKMEs(sce, ncol = 5)
-  print(kme_plot)
-  dev.off()
-
-  # Get hub genes
-  hub_df <- GetHubGenes(sce, n_hubs = n_hubs)
-  hub_file <- file.path(output_dir, "hdWGCNA_hub_genes.csv")
-  write.csv(hub_df, file = hub_file, row.names = FALSE)
-
-  # Get hMEs from Seurat object
-  MEs <- GetMEs(sce, harmonized = TRUE)
-  modules <- GetModules(sce)
-  mods <- levels(modules$module)
-  mods <- mods[mods != 'grey']
-
-  # Add hMEs to Seurat meta-data
-  sce@meta.data <- cbind(sce@meta.data, MEs)
-
-  # Plot with Seurat's DotPlot function
-  dot_plot <- DotPlot(sce, features = mods, group.by = group_by) +
-    RotatedAxis() +
-    scale_color_gradient2(high = 'red', mid = 'grey95', low = 'blue')
-
-  dot_plot_file <- file.path(output_dir, "hdWGCNA_dot_plot.pdf")
-  pdf(dot_plot_file, width = 6, height = 5)
-  print(dot_plot)
-  dev.off()
-
   # Return the Seurat object and hub genes data frame
-  return(list(seurat_obj = sce, hub_df = hub_df))
+  return(sce)
 }
 
 # Example usage
@@ -1179,7 +1148,111 @@ runHdWGCNAStep2 <- function(sce,
 # hub_df <- results$hub_df
 
 
-# ============== 13.runMistyRAnalysis ===========
+
+# ================== 13. runHdWGCNAStep3 ===========
+#' Run HdWGCNA Step 3
+#'
+#' This function performs the third step of hdWGCNA analysis, including plotting the dendrogram,
+#' getting module eigengenes (MEs) and module information, adding MEs to Seurat metadata,
+#' plotting module feature dot plots, module correlograms, and module feature plots,
+#' and saving hub genes to a CSV file.
+#'
+#' @param sce A Seurat object after hdWGCNA step 2.
+#' @param output_figure_dir A character string specifying the directory to save output figures.
+#' @param output_data_dir A character string specifying the directory to save output data files.
+#' @return None. The function saves plots and hub genes to the specified directories.
+#' @export
+#' @import Seurat
+#' @import patchwork
+#' @importFrom magrittr %>%
+#' @importFrom ggplot2 scale_color_gradientn
+#' @importFrom qs qread
+#' @examples
+#' \dontrun{
+#' runHdWGCNAStep3(
+#'   sce = sce,
+#'   output_figure_dir = './output_figure/',
+#'   output_data_dir = './output_data/'
+#' )
+#' }
+runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/') {
+  # Load necessary libraries
+  library(Seurat)
+  library(patchwork)
+  library(magrittr)
+  library(ggplot2)
+  library(qs)
+
+  # Ensure output directories exist
+  dir.create(output_figure_dir, showWarnings = FALSE, recursive = TRUE)
+  dir.create(output_data_dir, showWarnings = FALSE, recursive = TRUE)
+
+  # Plot hdWGCNA Dendrogram
+  pdf(file = file.path(output_figure_dir, "Hdwgcna_dendrogram.pdf"), width = 8, height = 8)
+  PlotDendrogram(sce, main = "hdWGCNA Dendrogram")
+  dev.off()
+
+  # Get module eigengenes (MEs) and module information
+  MEs <- GetMEs(sce, harmonized = TRUE)
+  modules <- GetModules(sce)
+  mods <- levels(modules$module)
+  mods <- mods[mods != "grey"]
+
+  # Add MEs to Seurat object metadata
+  sce@meta.data <- cbind(sce@meta.data, MEs)
+
+  # Plot module feature dot plot
+  dotplot <- DotPlot(sce, features = mods, group.by = 'celltype') +
+    RotatedAxis() +
+    scale_color_gradientn(colours = c("#27744B", "#6C9C7F", "#A3BFAD", "#D5E1DA", "#FBF9FA", "#D9C7CC",
+                                               "#B7939D", "#935867", "#6A1128"))
+
+  # Save dot plot to PDF
+  pdf(file = file.path(output_figure_dir, "Hdwgcna_dotplot.pdf"), width = 8, height = 4)
+  print(dotplot)
+  dev.off()
+
+  # Plot module correlogram
+  pdf(file = file.path(output_figure_dir, "Hdwgcna_modulecorrelation.pdf"), width = 5, height = 5)
+  ModuleCorrelogram(sce, sig.level = 0.001, pch.cex = 2)
+  dev.off()
+
+  # Plot module feature plots
+  plot_list <- ModuleFeaturePlot(
+    sce,
+    features = 'hMEs', # Plot hMEs
+    order = TRUE # Place highest hMEs points on top
+  )
+
+  # Combine plots using patchwork
+  combined_plot <- wrap_plots(plot_list)
+
+  # Save combined plot to PDF
+  pdf(file = file.path(output_figure_dir, "Hdwgcna_moduleFeaturePlot.pdf"), width = 8, height = 5)
+  print(combined_plot)
+  dev.off()
+
+  # Load Seurat object for hub genes extraction
+  sce <- qread(file.path(output_data_dir, "sce_hdWGCNA_step2.qs"))
+
+  # Get hub genes and save to file
+  hub_df <- GetHubGenes(sce, n_hubs = 50)
+  hub_file <- file.path(output_data_dir, "hdWGCNA_hub_genes.csv")
+  write.csv(hub_df, file = hub_file, row.names = FALSE)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+# ============== 14.runMistyRAnalysis ===========
 run_misty_seurat <- function(visium.slide,
                              # Seurat object with spatial transcriptomics data.
                              view.assays,
@@ -1598,7 +1671,7 @@ runMistyRAnalysis <- function(spatial_data, spot_mixture, output_dir, out_prefix
 # )
 
 
-# =============== 14. runInferCNV ==========
+# =============== 15. runInferCNV ==========
 #' @title Prepare Data for InferCNV
 #'
 #' @description  This function prepares the single-cell expression data for InferCNV analysis.
@@ -1996,7 +2069,7 @@ runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
 
 
 
-# ===================== 15.Gene_transfer========
+# ===================== 16.Gene_transfer========
 
 #' @title Gene Naming Conversion Functions
 #' @description These functions facilitate the conversion between human and mouse gene symbols and Ensembl IDs, and vice versa. They leverage both local and remote databases to provide fast and reliable gene identifier conversions, supporting a wide range of genetic studies.
@@ -2301,7 +2374,7 @@ biomartConvertGeneral <- function(
 }
 
 
-# ================ 16.import scenic loom ======
+# ================ 17.import scenic loom ======
 #' @rdname adata.Load
 #' @export
 

@@ -14,7 +14,7 @@ runHdWGCNAStep2(
 )
 }
 \arguments{
-\item{sce}{A Seurat object containing scRNA-seq data.}
+\item{sce}{A Seurat object after hdWGCNA step 1.}
 
 \item{soft_power}{An integer specifying the soft power value for constructing the co-expression network.}
 

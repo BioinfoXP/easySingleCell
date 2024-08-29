@@ -1675,7 +1675,7 @@ runMistyRAnalysis <- function(spatial_data, spot_mixture, output_dir, out_prefix
 #' @param sce_epi Single-cell expression data for the tumor epithelial cells.
 #' @param sce_refer Single-cell expression data for the reference cells (normal epithelial or immune cells).
 #' @param celltype Column name in meta.data that contains cell type information.
-#' @param infercnv_path Path to save InferCNV results.
+#' @param infercnv_path Path to save InferCNV results. Default is './output_data/inferCNV/'.
 #' @param name Name for the InferCNV run.
 #' @return A list containing the merged single-cell expression data and the path to saved files.
 #' @export
@@ -1698,7 +1698,7 @@ runMistyRAnalysis <- function(spatial_data, spot_mixture, output_dir, out_prefix
 #' )}
 #'
 PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
-                                   infercnv_path = './output_data', name = 'infer_run') {
+                                   infercnv_path = './output_data/inferCNV/', name = 'infer_run') {
   dir.create(infercnv_path, recursive = TRUE, showWarnings = FALSE)
 
   # Merge and normalize data
@@ -1723,7 +1723,7 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 #'
 #' This function performs InferCNV analysis on the prepared single-cell expression data.
 #'
-#' @param infercnv_path Path to the previous prepared saved InferCNV results. eg: './output_data', please don't use './output_data/'.
+#' @param infercnv_path Path to the previous prepared saved InferCNV results. Default is './output_data/inferCNV/'.
 #' @param gene_order_file Path to the gene order file. It will provided by this package default.
 #' @param ref_group_names A vector for reference group names for normal cells.
 #' @param name Name for the InferCNV run.
@@ -1766,7 +1766,7 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 #' # annotations_file <- paste0(infercnv_path, '/', name, '.celltype.label.txt')
 #' # out_path <- paste0(infercnv_path, '/', name)
 #' }
-RunInferCNVAnalysis <- function(infercnv_path = './output_data',
+RunInferCNVAnalysis <- function(infercnv_path = './output_data/inferCNV/',
                                 gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                 ref_group_names,
                                 name = 'infer_run',
@@ -1817,7 +1817,7 @@ RunInferCNVAnalysis <- function(infercnv_path = './output_data',
 #' @param k_clusters Number of clusters for k-means clustering (default is 5).
 #' @param heatmap_colors Colors for the heatmap (default is c("#2166ac", "white", "#b2182b")).
 #' @param cluster_colors Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39")).
-#' @param out_path Path to save the heatmap and clustering results.
+#' @param out_path Path to save the heatmap and clustering results. Default is './output_data/inferCNV/'.
 #' @return A data frame containing the clustering results.
 #' @export
 #' @import ComplexHeatmap
@@ -1863,7 +1863,7 @@ RunInferCNVAnalysis <- function(infercnv_path = './output_data',
 RunInferCNVCluster <- function(infercnv_obj, gene_order_file= system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                ref_cell_name, obs_cell_name, ref_group, obs_group,
                                         k_clusters = 6, heatmap_colors = c("#2166ac", "white", "#b2182b"),
-                                        cluster_colors =c("#E69F00","#56B4E9","#009E73","#F0E442","#0072B2","#843C39"),
+                                        cluster_colors =c("#E69F00","#56B4E9","#009E73","#F0E442","#0072B2"),
                                         out_path) {
 
   # Check if k_clusters equals length of cluster_colors
@@ -1944,7 +1944,7 @@ RunInferCNVCluster <- function(infercnv_obj, gene_order_file= system.file("extda
 #' @param sce_epi Single-cell expression data for the tumor epithelial cells.
 #' @param sce_refer Single-cell expression data for the reference cells (normal epithelial or immune cells).
 #' @param celltype Column name in meta.data that contains cell type information.
-#' @param infercnv_path Path to save InferCNV results.
+#' @param infercnv_path Path to save InferCNV results. Default is './output_data/inferCNV/'.
 #' @param name Name for the InferCNV run.
 #' @param gene_order_file Path to the gene order file (default is "hg38_gencode_v27.txt" from "easySingleCell" package).
 #' @param ref_group_names Reference group names for normal cells.
@@ -1954,8 +1954,9 @@ RunInferCNVCluster <- function(infercnv_obj, gene_order_file= system.file("extda
 #' @param obs_group Observed group label for clustering and visualization.
 #' @param k_clusters Number of clusters for k-means clustering (default is 5).
 #' @param heatmap_colors Colors for the heatmap (default is c("#2166ac", "white", "#b2182b")).
-#' @param cluster_colors Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39")).
-#' @param num_threads Number of threads to use for the analysis.
+#' @param cluster_colors Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2")).
+#'     cluster_colors must equal to k_clusters!
+#' @param num_threads Number of threads to use for the analysis. Default num_threads = 12.
 #' @return A list containing the InferCNV object and the clustering results.
 #' @export
 #' @import infercnv
@@ -2010,7 +2011,7 @@ RunInferCNVCluster <- function(infercnv_obj, gene_order_file= system.file("extda
 #' )
 #' }
 runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
-                                    infercnv_path = './output_data', name = 'infer_run',
+                                    infercnv_path = './output_data/', name = 'infer_run',
                                     gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                     ref_group_names,
                                     ref_cell_name, obs_cell_name, ref_group, obs_group,

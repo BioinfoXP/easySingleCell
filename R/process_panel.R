@@ -229,7 +229,7 @@ MarkDoubletsWrapper <- function(seu, PCs = 1:10, split.by = "orig.ident") {
 #' @param cell_type_column Column name in the Seurat object metadata representing cell types. Default is "celltype".
 #' @param width Width of the output PDF. Default is 6.
 #' @param height Height of the output PDF. Default is 10.
-#' @param method Method for metabolism score calculation. Default is "VISION".
+#' @param method Method for metabolism score calculation. Default is "AUCell".
 #' @return A Seurat object with metabolism scores added.
 #' @export
 #' @import scMetabolism
@@ -1160,6 +1160,7 @@ runHdWGCNAStep2 <- function(sce,
 #' @param sce A Seurat object after hdWGCNA step 2.
 #' @param output_figure_dir A character string specifying the directory to save output figures.
 #' @param output_data_dir A character string specifying the directory to save output data files.
+#' @param dotplot.group A character string specifying what the dotplot groupby.Default is "celltype".
 #' @param n_hubs An integer specifying the number of hub genes to extract and save.
 #' @return None. The function saves plots and hub genes to the specified directories.
 #' @export
@@ -1177,7 +1178,7 @@ runHdWGCNAStep2 <- function(sce,
 #'   n_hubs = 50
 #' )
 #' }
-runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', n_hubs = 50) {
+runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', dotplot.group = 'celltype',n_hubs = 50) {
   # Load necessary libraries
   library(Seurat)
   library(patchwork)
@@ -1204,7 +1205,7 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
   sce@meta.data <- cbind(sce@meta.data, MEs)
 
   # Plot module feature dot plot
-  dotplot <- DotPlot(sce, features = mods, group.by = 'celltype') +
+  dotplot <- DotPlot(sce, features = mods, group.by = dotplot.group) +
     RotatedAxis() +
     scale_color_gradientn(colours = c("#27744B", "#6C9C7F", "#A3BFAD", "#D5E1DA", "#FBF9FA", "#D9C7CC",
                                                "#B7939D", "#935867", "#6A1128"))
@@ -1700,14 +1701,9 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
                                    infercnv_path = './output_data', name = 'infer_run') {
   dir.create(infercnv_path, recursive = TRUE, showWarnings = FALSE)
 
-  # Normalize and cluster reference cells
-  sce_refer <- sce_refer %>%
-    NormalizeData() %>%
-    FindClusters()
-
   # Merge and normalize data
   sce_infer <- merge(sce_epi, sce_refer) %>%
-    NormalizeData() %>%
+    easySingleCell::run_normalize() %>%
     FindClusters()
 
   # Save count matrix and cell type labels

@@ -30,7 +30,7 @@ runScMetabolismAnalysis(
 
 \item{height}{Height of the output PDF. Default is 10.}
 
-\item{method}{Method for metabolism score calculation. Default is "VISION".}
+\item{method}{Method for metabolism score calculation. Default is "AUCell".}
 }
 \value{
 A Seurat object with metabolism scores added.

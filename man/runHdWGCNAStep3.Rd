@@ -8,6 +8,7 @@ runHdWGCNAStep3(
   sce,
   output_figure_dir = "./output_figure/",
   output_data_dir = "./output_data/",
+  dotplot.group = "celltype",
   n_hubs = 50
 )
 }
@@ -17,6 +18,8 @@ runHdWGCNAStep3(
 \item{output_figure_dir}{A character string specifying the directory to save output figures.}
 
 \item{output_data_dir}{A character string specifying the directory to save output data files.}
+
+\item{dotplot.group}{A character string specifying what the dotplot groupby.Default is "celltype".}
 
 \item{n_hubs}{An integer specifying the number of hub genes to extract and save.}
 }

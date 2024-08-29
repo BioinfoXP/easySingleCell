@@ -1708,7 +1708,7 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 
   # Save count matrix and cell type labels
   qsave(as.matrix(sce_infer[["RNA"]]@counts), file = paste0(infercnv_path, name, '.qs'))
-  write.table(sce_infer@meta.data[, celltype], file = paste0(infercnv_path, name, '.celltype.label.txt'),
+  write.table(sce_infer@meta.data[, celltype,drop=F], file = paste0(infercnv_path, name, '.celltype.label.txt'),
               sep = "\t", quote = FALSE, col.names = FALSE)
 
   return(list(sce_infer = sce_infer, infercnv_path = infercnv_path, name = name))

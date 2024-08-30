@@ -202,16 +202,16 @@ PreparePyscenic <- function(scRNA, celltype = 'celltype', output_dir = './output
   if (!use_MetaCell) {
     # Downsample Seurat object
     sce.sub <- subset(scRNA, downsample = nCells)
+
     mc.mat <- GetAssayData(sce.sub, slot = 'counts') %>%
       as.matrix()
 
     # Create a loom file for pySCENIC
-    loom <- SCopeLoomR::build_loom(
-      file.name = file.path(output_dir, "00-2.mc_mat_for_step1.loom"),
-      dgem = mc.mat,
-      default.embedding = NULL
-    )
-    loom$close()
+    sce.sub <- subset(sce, downsample = nCells)
+    easySingleCell::Seu2Loom(seu = sce.sub,
+                             overwrite = T,
+                             filename = file.path(output_dir, "00-2.mc_mat_for_step1.loom"))
+
   } else {
     # Load pre-prepared data
     load(system.file("data", "pyscenic_database.Rdata", package = "easySingleCell"))

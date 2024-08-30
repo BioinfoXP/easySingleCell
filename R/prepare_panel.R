@@ -202,7 +202,7 @@ PreparePyscenic <- function(scRNA, celltype = 'celltype', output_dir = './output
   if (!use_MetaCell) {
     # Downsample Seurat object
     sce.sub <- subset(scRNA, downsample = nCells)
-    mc.mat <- GetAssayData(sce.sub, assay = 'counts') %>%
+    mc.mat <- GetAssayData(sce.sub, slot = 'counts') %>%
       as.matrix()
 
     # Create a loom file for pySCENIC

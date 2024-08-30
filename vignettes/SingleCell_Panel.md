@@ -301,17 +301,24 @@ runMistyR(scRNA = scRNA)
 
 This function runs InferCNV analysis on single-cell RNA-seq data to infer copy number variations.
 
-### Usage
-
-```r
-runInferCNV(scRNA, reference_group, output_file = './output_data/InferCNV_results.Rdata', pdf_file = './output_figure/InferCNV.pdf', width = 6, height = 10)
-```
-
 ### Example
 
 ```r
-scRNA <- CreateSeuratObject(counts = your_data)
-runInferCNV(scRNA = scRNA, reference_group = "normal")
+runInferCNVPipeline(sce_epi = sce.hepa,
+                    sce_refer = sce.refer,
+                    celltype = 'celltype',
+                    infercnv_path = './output_data/Figure6/inferCNV/',
+                    name = 'infer_run',
+                    ref_group_names = c("Tcell", "Bcell"),
+                    ref_cell_name = c("Tcell", "Bcell"),
+                    obs_cell_name = "Hepatocyte",
+                    ref_group = "immune",
+                    obs_group = "Hepatocyte",
+                    k_clusters = 5,
+                    heatmap_colors = c("#2166ac", "white", "#b2182b"),
+                    cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"),
+                    num_threads = 16
+                    )
 ```
 
 ## Gene Naming Conversion Functions

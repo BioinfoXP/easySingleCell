@@ -241,7 +241,7 @@ MarkDoubletsWrapper <- function(seu, PCs = 1:10, split.by = "orig.ident") {
 #' runScMetabolismAnalysis(
 #'   scRNA = scRNA,
 #'   npathways = 20,
-#'   cell_type_column = "cell_type"
+#'   cell_type_column = "celltype"
 #' )
 #' }
 
@@ -1160,8 +1160,10 @@ runHdWGCNAStep2 <- function(sce,
 #' @param sce A Seurat object after hdWGCNA step 2.
 #' @param output_figure_dir A character string specifying the directory to save output figures.
 #' @param output_data_dir A character string specifying the directory to save output data files.
-#' @param dotplot.group A character string specifying what the dotplot groupby.Default is "celltype".
-#' @param n_hubs An integer specifying the number of hub genes to extract and save.
+#' @param dotplot_group A character string specifying the group by parameter for dotplot. Default is "celltype".
+#' @param n_hubs An integer specifying the number of hub genes to extract and save. Default is 50.
+#' @param do_GO_enrich A logical value indicating whether to perform GO enrichment analysis. Default is FALSE.
+#' @param species A character string specifying the species. Must be either 'human' or 'mouse'. Default is 'human'.
 #' @return None. The function saves plots and hub genes to the specified directories.
 #' @export
 #' @import Seurat
@@ -1178,7 +1180,7 @@ runHdWGCNAStep2 <- function(sce,
 #'   n_hubs = 50
 #' )
 #' }
-runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', dotplot.group = 'celltype',n_hubs = 50) {
+runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', dotplot_group = 'celltype', n_hubs = 50, do_GO_enrich = FALSE, species = 'human') {
   # Load necessary libraries
   library(Seurat)
   library(patchwork)
@@ -1205,7 +1207,7 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
   sce@meta.data <- cbind(sce@meta.data, MEs)
 
   # Plot module feature dot plot
-  dotplot <- DotPlot(sce, features = mods, group.by = dotplot.group) +
+  dotplot <- DotPlot(sce, features = mods, group.by = dotplot_group) +
     RotatedAxis() +
     scale_color_gradientn(colours = c("#27744B", "#6C9C7F", "#A3BFAD", "#D5E1DA", "#FBF9FA", "#D9C7CC",
                                                "#B7939D", "#935867", "#6A1128"))
@@ -1242,8 +1244,40 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
   hub_df <- GetHubGenes(sce, n_hubs = n_hubs)
   hub_file <- file.path(output_data_dir, "hdWGCNA_hub_genes.csv")
   write.csv(hub_df, file = hub_file, row.names = FALSE)
-}
 
+  # If do GO enrichment analysis
+  if (do_GO_enrich) {
+    library(clusterProfiler)
+    hub_df <- hub_df %>%
+      filter(module != 'grey')
+    ll <- split(hub_df, hub_df$module, drop = FALSE)
+    # check species
+    if (species == "human") {
+      library(org.Hs.eg.db)
+      res <- lapply(1:length(ll), function(x) {
+        enrichGO(gene = ll[[x]][, 1], OrgDb = org.Hs.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                 pvalueCutoff = 0.05, pAdjustMethod = 'BH')
+      })
+    } else if (species == "mouse") {
+      library(org.Mm.eg.db)
+      res <- lapply(1:length(ll), function(x) {
+        enrichGO(gene = ll[[x]][, 1], OrgDb = org.Mm.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                 pvalueCutoff = 0.05, pAdjustMethod = 'BH')
+      })
+    }
+
+    save(res, file = file.path(output_data_dir, "hdWGCNA_hub_genes_GO.Rdata"))
+    lapply(1:length(res), function(x) {
+      tmp <- dotplot(res[[x]]) +
+        ggtitle(names(ll)[x]) +
+        theme(plot.title = element_text(hjust = 0.5))
+      export::graph2pdf(tmp,
+                        file = paste0(output_data_dir, 'WGCNA-keyModule', names(ll)[x], '.pdf'),
+                        width = 6, height = 5)
+    })
+    return(res)
+  }
+}
 
 
 
@@ -2058,6 +2092,8 @@ runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
 
   return(list(infercnv_obj = infercnv_obj, clustering_results = clustering_results))
 }
+
+
 
 
 

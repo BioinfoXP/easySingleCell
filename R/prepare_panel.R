@@ -31,7 +31,7 @@ PrepareCpdb <- function(scRNA, output_dir = './output_data/', celltype_column = 
   cpdb_dir <- file.path(output_dir, 'cpdb')
   dir.create(cpdb_dir, showWarnings = FALSE, recursive = TRUE)
 
-  # Normalize the counts and filter genes with low expression
+  # Normalize the data and filter genes with low expression
   Normalized_counts <- GetAssayData(scRNA, slot = 'data') %>% as.data.frame()
   Normalized_counts$mean_exp <- rowMeans(Normalized_counts)
   Normalized_counts <- Normalized_counts[Normalized_counts$mean_exp > normalization_threshold, ]
@@ -483,6 +483,61 @@ ProcessPyscenic <- function(sce,
 
 
 
+# =========== 5. ProcessScFEA =============
+#' Prepare data for scFEA
+#'
+#' This function prepares single-cell RNA sequencing data for scFEA analysis.
+#' It exports the raw counts data to a specified output directory.
+#'
+#' @param scRNA A Seurat object containing single-cell RNA sequencing data.
+#' @param output_dir A character string specifying the directory where the output files will be saved. Default is './output_data/'.
+#' @param prefix A character string to be prefixed to the output file names. Default is an empty string.
+#'
+#' @return None. The function writes the counts data to a file in the specified output directory.
+#'
+#' @examples
+#' \dontrun{
+#' library(Seurat)
+#' # Assuming 'scRNA' is your Seurat object
+#' PrepareScFEA(scRNA, output_dir = './output_data/', prefix = "")
+#'
+#' # Example to run full pipeline:
+#' # ===> 1. Prepare environment
+#' # git clone https://github.com/changwn/scFEA
+#' # cd scFEA
+#' # conda create -n scFEA -y \
+#' # && conda activate scFEA \
+#' # && conda install python=3.8 -y \
+#' # && conda install --file requirements -y \
+#' # && conda install pytorch torchvision -c pytorch -y \
+#' # && pip install --user magic-impute \
+#' # && conda install pandas=1.5.3 -y
+#' # pip install ipykernel
+#' # python -m ipykernel install --user --name scFEA --display-name "scFEA"
+#'
+#' # ===> 2. Prepare file
+#' # PrepareScFEA(scRNA, output_dir = './output_data/', prefix = "")
+#'
+#' # ===> Run scFEA analysis
+#' # python src/scFEA.py --data_dir data --input_dir input \
+#' # --test_file scFEA_counts.txt \
+#' # --moduleGene_file module_gene_m168.csv \
+#' # --stoichiometry_matrix cmMat_c70_m168.csv \
+#' # --output_flux_file output/flux.csv \
+#' # --output_balance_file output/flux_balance.csv \
+#' # --sc_imputation True
+#' }
+#'
+#' @export
+PrepareScFEA <- function(scRNA, output_dir = './output_data/', prefix = "") {
+  # Ensure necessary libraries are loaded
+  library(Seurat)
 
+  # Create the output directory
+  scFEA_dir <- file.path(output_dir, 'scFEA')
+  dir.create(scFEA_dir, showWarnings = FALSE, recursive = TRUE)
 
-
+  # Export the counts
+  counts <- GetAssayData(scRNA, slot = 'counts')
+  write.csv(counts, file = file.path(scFEA_dir, paste0(prefix, 'scFEA_counts.txt')), row.names = TRUE)
+}

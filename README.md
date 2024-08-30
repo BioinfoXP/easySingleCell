@@ -20,6 +20,9 @@
 
 To install the development version of `easySingleCell`, use the following commands:
 
+Tips: Seurat 4.4.0; SeuratObject 4.1.4; 
+      Matrix 1.5-1 and Matrix 1.6-1
+
 ```r
 # Install devtools if you haven't already
 install.packages("devtools")
@@ -41,6 +44,8 @@ remotes::install_github("BioinfoXP/easySingleCell", upgrade = F, dependencies = 
 ```
 
 ## Vignettes
+
+For more details, please read the files below!
 
 ### [TCGA_Panel](vignettes/TCGA_Panel.md)
 

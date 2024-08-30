@@ -40,10 +40,17 @@ PrepareScFEA(scRNA, output_dir = './output_data/', prefix = "")
 # pip install ipykernel
 # python -m ipykernel install --user --name scFEA --display-name "scFEA"
 
+
+# pip install --user magic-impute
+# Use "python src/scFEA.py --help" to check install.
+
+
 # ===> 2. Prepare file
 # PrepareScFEA(scRNA, output_dir = './output_data/', prefix = "")
 
-# ===> Run scFEA analysis
+# ===> 3. Run scFEA analysis
+# cd scFEA
+# ===> Enter the scFEA folder and move your .csv file into "input" folder.
 # python src/scFEA.py --data_dir data --input_dir input \
 # --test_file scFEA_counts.txt \
 # --moduleGene_file module_gene_m168.csv \

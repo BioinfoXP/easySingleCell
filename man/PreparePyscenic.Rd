@@ -8,6 +8,7 @@ PreparePyscenic(
   scRNA,
   celltype = "celltype",
   output_dir = "./output_data/",
+  nCells = 500,
   use_MetaCell = FALSE,
   min_cells = 10,
   reduction = "umap",
@@ -23,17 +24,19 @@ PreparePyscenic(
 
 \item{output_dir}{A character string specifying the output directory where results will be saved. Default is './output_data/'.}
 
-\item{use_MetaCell}{A logical value indicating whether to use MetaCell. Default is FALSE.}
+\item{nCells}{An integer specifying the number of cells to downsample to if not using MetaCell. Default is 500.}
 
-\item{min_cells}{An integer specifying the minimum number of cells for meta cell creation. Default is 10.}
+\item{use_MetaCell}{A logical value indicating whether to use MetaCell. If FALSE, the function will downsample the Seurat object using raw counts. Default is FALSE.}
 
-\item{reduction}{A character string specifying the reduction method to use. Default is 'umap'.}
+\item{min_cells}{An integer specifying the minimum number of cells for meta cell creation. Only used if use_MetaCell is TRUE. Default is 10.}
 
-\item{dims}{A numeric vector specifying the dimensions to use for the reduction. Default is 1:2.}
+\item{reduction}{A character string specifying the reduction method to use. Only used if use_MetaCell is TRUE. Default is 'umap'.}
 
-\item{k_param}{An integer specifying the k parameter for meta cell creation. Default is 10.}
+\item{dims}{A numeric vector specifying the dimensions to use for the reduction. Only used if use_MetaCell is TRUE. Default is 1:2.}
 
-\item{cores}{An integer specifying the number of cores to use. Default is 10.}
+\item{k_param}{An integer specifying the k parameter for meta cell creation. Only used if use_MetaCell is TRUE. Default is 10.}
+
+\item{cores}{An integer specifying the number of cores to use. Only used if use_MetaCell is TRUE. Default is 10.}
 }
 \value{
 None. The function saves the meta cell matrix and other necessary files for pySCENIC analysis in the specified output directory.
@@ -47,6 +50,8 @@ creating meta cells, and generating the necessary files for pySCENIC.
 PreparePyscenic(
   scRNA = scRNA,
   output_dir = './output_data/',
+  nCells = 500,
+  use_MetaCell = FALSE,
   min_cells = 10,
   reduction = 'umap',
   dims = 1:2,

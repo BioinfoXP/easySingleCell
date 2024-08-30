@@ -44,7 +44,7 @@ scRNA <- readRDS('./path_to_your_seurat_object.rds')
 runScMetabolismAnalysis(
   scRNA = scRNA,
   npathways = 20,
-  cell_type_column = "cell_type"
+  cell_type_column = "celltype"
 )
 }
 }

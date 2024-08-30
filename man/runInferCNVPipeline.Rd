@@ -8,7 +8,7 @@ runInferCNVPipeline(
   sce_epi,
   sce_refer,
   celltype = "celltype",
-  infercnv_path = "./output_data",
+  infercnv_path = "./output_data/",
   name = "infer_run",
   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package =
     "easySingleCell"),
@@ -30,7 +30,7 @@ runInferCNVPipeline(
 
 \item{celltype}{Column name in meta.data that contains cell type information.}
 
-\item{infercnv_path}{Path to save InferCNV results.}
+\item{infercnv_path}{Path to save InferCNV results. Default is './output_data/inferCNV/'.}
 
 \item{name}{Name for the InferCNV run.}
 
@@ -50,9 +50,10 @@ runInferCNVPipeline(
 
 \item{heatmap_colors}{Colors for the heatmap (default is c("#2166ac", "white", "#b2182b")).}
 
-\item{cluster_colors}{Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39")).}
+\item{cluster_colors}{Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2")).
+cluster_colors must equal to k_clusters!}
 
-\item{num_threads}{Number of threads to use for the analysis.}
+\item{num_threads}{Number of threads to use for the analysis. Default num_threads = 12.}
 }
 \value{
 A list containing the InferCNV object and the clustering results.

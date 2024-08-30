@@ -8,7 +8,7 @@ PrepareDataForInferCNV(
   sce_epi,
   sce_refer,
   celltype = "celltype",
-  infercnv_path = "./output_data",
+  infercnv_path = "./output_data/inferCNV/",
   name = "infer_run"
 )
 }
@@ -19,7 +19,7 @@ PrepareDataForInferCNV(
 
 \item{celltype}{Column name in meta.data that contains cell type information.}
 
-\item{infercnv_path}{Path to save InferCNV results.}
+\item{infercnv_path}{Path to save InferCNV results. Default is './output_data/inferCNV/'.}
 
 \item{name}{Name for the InferCNV run.}
 }

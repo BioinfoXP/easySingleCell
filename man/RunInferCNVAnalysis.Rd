@@ -5,7 +5,7 @@
 \title{Run InferCNV Analysis}
 \usage{
 RunInferCNVAnalysis(
-  infercnv_path = "./output_data",
+  infercnv_path = "./output_data/inferCNV/",
   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package =
     "easySingleCell"),
   ref_group_names,
@@ -14,7 +14,7 @@ RunInferCNVAnalysis(
 )
 }
 \arguments{
-\item{infercnv_path}{Path to the previous prepared saved InferCNV results. eg: './output_data', please don't use './output_data/'.}
+\item{infercnv_path}{Path to the previous prepared saved InferCNV results. Default is './output_data/inferCNV/'.}
 
 \item{gene_order_file}{Path to the gene order file. It will provided by this package default.}
 

@@ -20,8 +20,14 @@
 
 To install the development version of `easySingleCell`, use the following commands:
 
-Tips: Seurat 4.4.0; SeuratObject 4.1.4; 
-      Matrix 1.5-1 and Matrix 1.6-1
+Tips: For R version 4.2.2 (2022-10-31), it is recommed.
+- Seurat 4.4.0
+- SeuratObject 4.1.4
+- Matrix 1.5-1
+- Matrix 1.6-1
+> Seurat: https://github.com/satijalab/seurat/releases
+> SeuratObject: https://github.com/satijalab/seurat-object/releases
+> Matrix: https://cran.r-project.org/src/contrib/Archive/Matrix/
 
 ```r
 # Install devtools if you haven't already

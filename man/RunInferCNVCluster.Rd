@@ -14,7 +14,7 @@ RunInferCNVCluster(
   obs_group,
   k_clusters = 6,
   heatmap_colors = c("#2166ac", "white", "#b2182b"),
-  cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
+  cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"),
   out_path
 )
 }
@@ -37,7 +37,7 @@ RunInferCNVCluster(
 
 \item{cluster_colors}{Colors for the clusters (default is c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39")).}
 
-\item{out_path}{Path to save the heatmap and clustering results.}
+\item{out_path}{Path to save the heatmap and clustering results. Default is './output_data/inferCNV/'.}
 }
 \value{
 A data frame containing the clustering results.

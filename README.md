@@ -26,7 +26,9 @@ Tips: For R version 4.2.2 (2022-10-31), it is recommed.
 - Matrix 1.5-1
 - Matrix 1.6-1
 > Seurat: https://github.com/satijalab/seurat/releases
+> 
 > SeuratObject: https://github.com/satijalab/seurat-object/releases
+> 
 > Matrix: https://cran.r-project.org/src/contrib/Archive/Matrix/
 
 ```r

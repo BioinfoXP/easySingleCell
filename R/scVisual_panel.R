@@ -9,7 +9,9 @@
 #' @param max.cutoff A numeric value specifying the maximum cutoff for the feature values (default is 1.5).
 #' @param cols A vector of colors to be used for the plot.
 #' @param title A character string specifying the title of the plot. If NULL, the feature name will be used as the title.
-#' @return A ggplot object representing the feature plot.
+#' @param ncol A numeric value specifying the patchwork nrow (default is NULL).
+#' @param nrow A numeric value specifying  the patchwork ncol (default is NULL).
+#' @return A ggplot/patchwork object representing the feature plot.
 #' @export
 #' @import Seurat
 #' @import ggplot2
@@ -40,7 +42,7 @@
 #' print(plot)
 #' }
 
-scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols =  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"), title = NULL) {
+scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols =  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"), title = NULL,ncol = NULL, nrow = NULL) {
   # Ensure necessary libraries are loaded
   library(Seurat)
   library(ggplot2)
@@ -74,7 +76,7 @@ scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.000
         ggtitle(x)
     })
 
-    return(patchwork::wrap_plots(plot))
+    return(patchwork::wrap_plots(plot,ncol = ncol,nrow = nrow))
   } else {
     # Create the feature plot
     plot <- FeaturePlot(

@@ -174,6 +174,7 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 #' @import SCopeLoomR
 #' @examples
 #' \dontrun{
+#' ##===== 1. Prepare the input data ====
 #' PreparePyscenic(
 #'   scRNA = scRNA,
 #'   output_dir = './output_data/',
@@ -185,6 +186,74 @@ makeMetaCells <- function(seu, min.cells = 10, reduction = "umap", dims = 1:2, k
 #'   k_param = 10,
 #'   cores = 10
 #' )
+#' # The output .loom file will be saved in the specified output directory.
+#'
+#' ##===== 2. Run in Linux ====
+#' #!/bin/bash
+#'
+#' # Define your path
+#' path=./
+#' data_path=./
+#' db_path=$path/cisTarget_db
+#'
+#' # Inputs
+#' f_loom_grn=00-2.mc_mat_for_step1.loom
+#'
+#' # Outputs
+#' grn_output=01-step1_adj.csv
+#' ctx_output=01-step2_reg.csv
+#' pyscenic_output=03-pyscenic_output.loom
+#'
+#' # Reference files
+#' f_tfs=hsa_hgnc_tfs.motifs-v10.txt
+#' f_motif_path=motifs-v10nr_clust-nr.hgnc-m0.001-o0.0.tbl
+#' f_db_500bp=hg38_500bp_up_100bp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather
+#' f_db_10kb=hg38_10kbp_up_10kb_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather
+#'
+#' # Use cores
+#' cores=12
+#'
+#' #### 1. Build GRN
+#' #### pyscenic ctx or arboreto_with_multiprocessing.py
+#' # ~17.5 mins
+#' echo "Building GRN..."
+#' arboreto_with_multiprocessing.py \
+#' --seed 777 \
+#' --num_workers $cores \
+#' --method grnboost2 \
+#' -o $data_path/$grn_output \
+#' $data_path/$f_loom_grn \
+#' $db_path/$f_tfs
+#'
+#' #### 2. cisTarget
+#' # ~30 mins, low memory usage
+#' echo "Running cisTarget..."
+#' pyscenic ctx \
+#' $data_path/$grn_output \
+#' $db_path/$f_db_500bp $db_path/$f_db_10kb \
+#' --annotations_fname $db_path/$f_motif_path \
+#' --expression_mtx_fname $data_path/$f_loom_grn \
+#' --output $data_path/$ctx_output \
+#' --num_workers $cores
+#'
+#' #### not need run 3. aucell
+#' #echo "Running AUCell..."
+#' #pyscenic aucell \
+#' #$data_path/$f_loom_grn \
+#' #$data_path/$ctx_output \
+#' #--output $data_path/$pyscenic_output \
+#' #--num_workers $cores \
+#' #--seed 777
+#'
+#' #### 4. Convert regulon to *.gmt
+#' echo "Converting regulon to GMT..."
+#' python 02_regulon2gmt.py
+#' echo "Pipeline completed successfully."
+#'
+#' ##===== 3. Process the results ====
+#' easySingleCell::ProcessPyscenic(sce, inputdir = './output_data/Figure7/pyscenic/',
+#' gmtfile = '02-Regulon.regulons.gmt',
+#' outputdir = './output_data/Figure7/')
 #' }
 PreparePyscenic <- function(scRNA, celltype = 'celltype', output_dir = './output_data/',
                             nCells = 500, use_MetaCell = FALSE, min_cells = 10, reduction = 'umap',
@@ -203,13 +272,12 @@ PreparePyscenic <- function(scRNA, celltype = 'celltype', output_dir = './output
     # Downsample Seurat object
     sce.sub <- subset(scRNA, downsample = nCells)
 
-    mc.mat <- GetAssayData(sce.sub, slot = 'counts') %>%
-      as.matrix()
+    # mc.mat <- GetAssayData(sce.sub, slot = 'counts') %>%
+    #   as.matrix()
 
     # Create a loom file for pySCENIC
-    sce.sub <- subset(sce, downsample = nCells)
     easySingleCell::Seu2Loom(seu = sce.sub,
-                             overwrite = T,
+                             overwrite = TRUE,
                              filename = file.path(output_dir, "00-2.mc_mat_for_step1.loom"))
 
   } else {

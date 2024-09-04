@@ -11,7 +11,9 @@ scVisFeaturePlot(
   pt.size = 1e-04,
   max.cutoff = 1.5,
   cols = c("#FFEFD5", "#E6E6FA", "#87CEFA", "#6495ED", "#4169E1", "#0000CD", "#000080"),
-  title = NULL
+  title = NULL,
+  ncol = NULL,
+  nrow = NULL
 )
 }
 \arguments{
@@ -28,9 +30,13 @@ scVisFeaturePlot(
 \item{cols}{A vector of colors to be used for the plot.}
 
 \item{title}{A character string specifying the title of the plot. If NULL, the feature name will be used as the title.}
+
+\item{ncol}{A numeric value specifying the patchwork nrow (default is NULL).}
+
+\item{nrow}{A numeric value specifying  the patchwork ncol (default is NULL).}
 }
 \value{
-A ggplot object representing the feature plot.
+A ggplot/patchwork object representing the feature plot.
 }
 \description{
 This function creates a feature plot for single-cell data using a specified reduction method.

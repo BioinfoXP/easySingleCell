@@ -917,12 +917,12 @@ runCellChatAnalysis <- function(sce, celltype = 'cell_type', groupby = NULL, spe
     names_list <- "all"
   }
 
-  # Normalize and cluster
-  sce_list <- mclapply(1:length(sce_list), function(i) {
-    sce_list[[i]] %>%
-      NormalizeData() %>%
-      FindClusters()
-  }, mc.cores = ncores)
+  # Normalize and cluster ===> Not need Run!
+  # sce_list <- mclapply(1:length(sce_list), function(i) {
+  #   sce_list[[i]] %>%
+  #     NormalizeData() %>%
+  #     FindClusters()
+  # }, mc.cores = ncores)
 
   # Run CellChat analysis
   cellchat_res <- mclapply(1:length(sce_list), function(i) {

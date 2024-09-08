@@ -619,3 +619,6 @@ PrepareScFEA <- function(scRNA, output_dir = './output_data/', prefix = "") {
   counts <- GetAssayData(scRNA, slot = 'counts')
   write.csv(counts, file = file.path(scFEA_dir, paste0(prefix, 'scFEA_counts.txt')), row.names = TRUE)
 }
+
+
+

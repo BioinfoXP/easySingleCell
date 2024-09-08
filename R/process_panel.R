@@ -1658,7 +1658,7 @@ runMistyRAnalysis <- function(spatial_data, spot_mixture, output_dir, out_prefix
 
   # Run colocalization analysis
   misty_output <- run_colocalization(
-    spatial_data = spatial_data,
+    slide = spatial_data,
     assay = 'predictions',
     useful_features = useful_features,
     out_label = out_prefix,
@@ -2578,6 +2578,64 @@ ImportPyscenicLoom <- function(loom.path, seu = NULL) {
 }
 
 
+
+# ================ 18.process Spatial Transcriptomics Data ======
+
+#' Process Spatial Transcriptomics Data
+#'
+#' This function processes spatial transcriptomics data using a series of steps including loading data,
+#' normalization, PCA, neighbor finding, clustering, and UMAP projection. It also prepares a spatial plot.
+#'
+#' @param data_dir A character string specifying the directory containing the 10X Genomics spatial transcriptomics data.
+#' @param sample A character string specifying the sample identifier.
+#' @param filename A character string specifying the name of the file containing the spatial transcriptomics data. Default is 'filtered_feature_bc_matrix.h5'.
+#' @param assay A character string specifying the assay to use. Default is 'Spatial'.
+#' @param dims A numeric vector specifying the dimensions to use for PCA and neighbor finding. Default is 1:20.
+#' @param resolution A numeric value specifying the resolution parameter for clustering. Default is 0.5.
+#' @param umap_dims A numeric vector specifying the dimensions to use for UMAP. Default is 1:20.
+#' @param verbose A logical value indicating whether to print progress messages. Default is FALSE.
+#' @return A Seurat object containing the processed spatial transcriptomics data.
+#' @export
+#' @import Seurat
+#' @importFrom magrittr %>%
+#' @examples
+#' \dontrun{
+#' st <- ProcessSpatialData(
+#'   data_dir = "path/to/data",
+#'   sample = "Sample_1",
+#'   filename = "filtered_feature_bc_matrix.h5",
+#'   assay = "Spatial",
+#'   dims = 1:20,
+#'   resolution = 0.5,
+#'   umap_dims = 1:20,
+#'   verbose = FALSE
+#' )
+#' }
+ProcessSpatialData <- function(data_dir, sample, filename = "filtered_feature_bc_matrix.h5", assay = "Spatial", dims = 1:20,
+                               resolution = 0.5, umap_dims = 1:20, verbose = FALSE) {
+  # Load necessary libraries
+  library(Seurat)
+  library(magrittr)
+
+  # Load spatial transcriptomics data
+  st <- Load10X_Spatial(data.dir = data_dir, filename = filename, assay = assay) %>%
+    SCTransform(verbose = verbose, assay = assay) %>%
+    RunPCA(assay = "SCT", verbose = verbose) %>%
+    FindNeighbors(reduction = "pca", dims = dims) %>%
+    FindClusters(resolution = resolution, verbose = verbose) %>%
+    RunUMAP(reduction = "pca", dims = umap_dims)
+
+  # Add sample identifier
+  st$orig.ident <- sample
+
+  # Prepare spatial coordinates for plotting
+  spatial_coords <- st@images$slice1@coordinates[, c('col', 'row')]
+  colnames(spatial_coords) <- c('s_1', 's_2')
+  spatial_coords <- as.matrix(spatial_coords)
+  st[["spatial"]] <- CreateDimReducObject(embeddings = spatial_coords, key = "s_", assay = "Spatial")
+
+  return(st)
+}
 
 
 

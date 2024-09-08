@@ -1987,3 +1987,98 @@ cpdb_visualization <- function(sce, pvals_path, means_path, decon_path,
 
   dev.off()
 }
+
+
+# ================= 8.stvisSpatialDimplot=======
+#' stvisSpatialDimplot
+#'
+#' This function creates spatial plots for spatial transcriptomics data.
+#'
+#' @param stRNA A Seurat object containing spatial transcriptomics data.
+#' @param feature A character string or vector specifying the feature(s) to plot (used only for feature plots). Default is NULL.
+#' @param ad An integer specifying the number of black colors to add to the palette. Default is 1.
+#' @param limits A numeric vector specifying the limits for the color scale. Default is 1.
+#' @param min_cutoff A numeric value specifying the minimum cutoff for the feature plot. Default is 0.
+#' @param plot_type A character string specifying the type of plot to create. Options are "feature" or "spatial". Default is "feature".
+#' @param title A character string specifying the title of the plot. Default is an empty string.
+#' @param ncol A numeric value specifying the number of columns for patchwork layout. Default is NULL.
+#' @param nrow A numeric value specifying the number of rows for patchwork layout. Default is NULL.
+#' @return A ggplot object representing the spatial plot.
+#' @export
+#' @import Seurat
+#' @import ggplot2
+#' @importFrom paletteer paletteer_c
+#' @importFrom patchwork wrap_plots
+#' @examples
+#' \dontrun{
+#' p <- stvisSpatialDimplot(
+#'   stRNA = seurat_object,
+#'   feature = "GeneA",
+#'   plot_type = "feature",
+#'   title = "GeneA Expression"
+#' )
+#' print(p)
+#' }
+stvisSpatialDimplot <- function(stRNA, feature = NULL, ad = 1, limits = 1, min_cutoff = 0,
+                                plot_type = c("feature", "spatial"), title = "", ncol = NULL, nrow = NULL) {
+  # 生成颜色调色板
+  viridis_plasma_light_high <- as.vector(x = paletteer_c(palette = "viridis::inferno", n = 250, direction = 1))
+  viridis_plasma_light_high <- c(rep("black", ad), viridis_plasma_light_high)
+
+  # 设置隐藏轴的主题
+  hide_axis <- theme(axis.title.x = element_blank(),
+                     axis.text.x = element_blank(),
+                     axis.ticks.x = element_blank(),
+                     axis.title.y = element_blank(),
+                     axis.text.y = element_blank(),
+                     axis.ticks.y = element_blank())
+
+  plot_type <- match.arg(plot_type)
+
+  if (plot_type == "feature" & !is.null(feature)) {
+    # 生成特征图
+    plots <- lapply(feature, function(x) {
+      p <- FeaturePlot(stRNA, features = x, reduction = 'spatial', min.cutoff = min_cutoff) +
+        theme_void() + theme(
+          axis.ticks = element_blank(),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.line = element_blank(),
+          panel.border = element_rect(color = "white", fill = NA, size = 2)
+        ) + scale_y_reverse() +
+        ggtitle(paste0(x, title)) +
+        DarkTheme() +
+        xlab(NULL) +
+        ylab(NULL)
+      if (length(limits) == 1) {
+        p <- p + scale_colour_gradientn(colours = viridis_plasma_light_high, na.value = "black")
+      } else {
+        p <- p + scale_colour_gradientn(colours = viridis_plasma_light_high, na.value = "black", limits = limits)
+      }
+      return(p)
+    })
+
+    return(patchwork::wrap_plots(plots, ncol = ncol, nrow = nrow))
+
+  } else if (plot_type == "spatial") {
+    # 生成空间图
+    p <- SpatialPlot(stRNA, repel = FALSE, label = FALSE, image.alpha = 1, alpha = c(0, 0), pt.size.factor = 0.000001) +
+      geom_point(alpha = 0) +
+      NoLegend() +
+      DarkTheme() +
+      hide_axis +
+      ggtitle(title) +
+      theme(text = element_text(size = 14, face = "bold"))
+
+    return(p)
+  } else {
+    stop("For 'feature' plot type, 'feature' parameter must be provided.")
+  }
+}
+
+
+
+
+
+
+

@@ -1,5 +1,21 @@
 {
     "debugBreakpointsState": {
-        "breakpoints": []
+        "breakpoints": [
+            {
+                "id": 0,
+                "path": "~/R_wls2/OneGene-main/R/process_panel.R",
+                "line_number": 2790,
+                "function_steps": "20",
+                "function_name": "runMIA",
+                "state": 1,
+                "editor_state": 1,
+                "editor_line_number": 2790,
+                "is_pending_debug_completion": false,
+                "needs_updated_steps": false,
+                "type": 0,
+                "is_package_breakpoint": true,
+                "package_name": "easySingleCell"
+            }
+        ]
     }
 }

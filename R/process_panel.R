@@ -2787,7 +2787,7 @@ runMIA <- function(sp.diff, sc.diff, prefix, outdir) {
     data <- rbind(data, enrich.list[[i]])
   }
 
-  write.csv(data, file = paste(outdir, 'MIA.Result.csv', sep = '/'), quote = FALSE, row.names = FALSE)
+  write.csv(data, file = paste0(outdir, '/',prefix,'_MIA.Result.csv'), quote = FALSE, row.names = FALSE)
 
   all.terms <- NULL
   for (x in enrich.list) {

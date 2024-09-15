@@ -2728,7 +2728,7 @@ prepareMIAst <- function(stRNA, group = 'celltype', assay = 'SCT', st.logfc = 0.
 #' @description This function performs marker interaction analysis using spatial and single cell data.
 #' @param sp.diff Data frame of spatial region specific markers.
 #' @param sc.diff Data frame of single cell type specific markers.
-#' @param sample Sample name for the output files.
+#' @param prefix Sample prefix for the output files.
 #' @param outdir Directory to save the output results.
 #' @return None
 #' @export
@@ -2739,9 +2739,9 @@ prepareMIAst <- function(stRNA, group = 'celltype', assay = 'SCT', st.logfc = 0.
 #' @import circlize
 #' @examples
 #' \dontrun{
-#' runMIA(sp.diff = sp.diff, sc.diff = sc.diff, sample = 'sample1', outdir = './output_data/')
+#' runMIA(sp.diff = sp.diff, sc.diff = sc.diff, prefix = 'sample1', outdir = './output_data/')
 #' }
-runMIA <- function(sp.diff, sc.diff, sample, outdir) {
+runMIA <- function(sp.diff, sc.diff, prefix, outdir) {
   PVALUE.CUTOFF <- 1
   QVALUE.CUTOFF <- 1
   MIN.GSSIZE <- 1

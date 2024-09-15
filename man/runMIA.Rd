@@ -4,14 +4,14 @@
 \alias{runMIA}
 \title{Run Marker Interaction Analysis}
 \usage{
-runMIA(sp.diff, sc.diff, sample, outdir)
+runMIA(sp.diff, sc.diff, prefix, outdir)
 }
 \arguments{
 \item{sp.diff}{Data frame of spatial region specific markers.}
 
 \item{sc.diff}{Data frame of single cell type specific markers.}
 
-\item{sample}{Sample name for the output files.}
+\item{prefix}{Sample prefix for the output files.}
 
 \item{outdir}{Directory to save the output results.}
 }
@@ -23,6 +23,6 @@ This function performs marker interaction analysis using spatial and single cell
 }
 \examples{
 \dontrun{
-runMIA(sp.diff = sp.diff, sc.diff = sc.diff, sample = 'sample1', outdir = './output_data/')
+runMIA(sp.diff = sp.diff, sc.diff = sc.diff, prefix = 'sample1', outdir = './output_data/')
 }
 }

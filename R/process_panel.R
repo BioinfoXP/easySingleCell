@@ -2665,10 +2665,14 @@ prepareMIAsc <- function(scRNA, group = 'celltype', assay = 'RNA', sc.logfc = 0.
   sc.markers <- FindAllMarkers(scRNA, only.pos = TRUE, min.pct = sc.pct, logfc.threshold = sc.logfc)
   sc.markers$d <- sc.markers$pct.1 - sc.markers$pct.2
 
-  sc.main.marker <- subset(sc.markers, avg_log2FC > sc.logfc & p_val_adj < 0.05 & sc.pct > sc.pct)
+  sc.main.marker <- sc.markers %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(avg_log2FC > sc.logfc) %>%
+    dplyr::filter(d > sc.pct)
   sc.main.marker <- sc.main.marker %>% arrange(cluster, desc(avg_log2FC))
   sc.main.marker <- as.data.frame(sc.main.marker)
-  sc.main.marker$cluster <- paste('sc', sc.main.marker$cluster, sep = '_')
+
+  sc.main.marker$cluster <- paste0('sc_',sc.main.marker$cluster)
 
   celltype_specific <- sc.main.marker[, c("cluster", "gene")]
   colnames(celltype_specific)[1] <- "celltype"
@@ -2702,7 +2706,9 @@ prepareMIAst <- function(stRNA, group = 'celltype', assay = 'SCT', st.logfc = 0.
   region_marker <- FindAllMarkers(stRNA, logfc.threshold = st.logfc, only.pos = TRUE, min.pct = st.pct)
   region_marker$d <- region_marker$pct.1 - region_marker$pct.2
 
-  region_main_marker <- subset(region_marker, avg_log2FC > st.logfc & p_val_adj < 0.05 & d > st.pct)
+  region_main_marker <- region_marker %>% dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(avg_log2FC > st.logfc) %>%
+    dplyr::filter(d > st.pct)
   region_main_marker <- region_main_marker %>% arrange(cluster, desc(avg_log2FC))
   region_main_marker <- as.data.frame(region_main_marker)
   region_main_marker$cluster <- paste('spatial', region_main_marker$cluster, sep = '_')

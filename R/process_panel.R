@@ -2638,8 +2638,215 @@ ProcessSpatialData <- function(data_dir, sample, filename = "filtered_feature_bc
 }
 
 
+# ========= 19. runMIA =======
 
 
+# ============== prepareMIAsc
 
+#' @title Prepare Marker Information for Single Cell Data
+#' @description This function identifies marker genes for single cell data.
+#' @param scRNA Seurat object of single cell RNA data.
+#' @param group Grouping variable for cell types.
+#' @param assay Assay to use for the analysis.
+#' @param sc.logfc Log fold change threshold for marker identification.
+#' @param sc.pct Minimum percentage of cells expressing the gene.
+#' @return A list containing main markers and cell type specific markers.
+#' @export
+#' @import tidyverse
+#' @import Seurat
+#' @examples
+#' \dontrun{
+#' prepareMIAsc(scRNA = scRNA, group = 'celltype', assay = 'RNA')
+#' }
+prepareMIAsc <- function(scRNA, group = 'celltype', assay = 'RNA', sc.logfc = 0.5, sc.pct = 0.2) {
+  DefaultAssay(scRNA) <- assay
+  Idents(scRNA) <- group
 
+  sc.markers <- FindAllMarkers(scRNA, only.pos = TRUE, min.pct = sc.pct, logfc.threshold = sc.logfc)
+  sc.markers$d <- sc.markers$pct.1 - sc.markers$pct.2
 
+  sc.main.marker <- subset(sc.markers, avg_log2FC > sc.logfc & p_val_adj < 0.05 & sc.pct > sc.pct)
+  sc.main.marker <- sc.main.marker %>% arrange(cluster, desc(avg_log2FC))
+  sc.main.marker <- as.data.frame(sc.main.marker)
+  sc.main.marker$cluster <- paste('sc', sc.main.marker$cluster, sep = '_')
+
+  celltype_specific <- sc.main.marker[, c("cluster", "gene")]
+  colnames(celltype_specific)[1] <- "celltype"
+
+  res <- list(sc.main.marker, celltype_specific)
+  names(res) <- c('sc.main.marker', 'celltype_specific')
+
+  return(res)
+}
+
+# ============== prepareMIAst
+
+#' @title Prepare Marker Information for Spatial Transcriptomics Data
+#' @description This function identifies marker genes for spatial transcriptomics data.
+#' @param stRNA Seurat object of spatial transcriptomics data.
+#' @param group Grouping variable for cell types.
+#' @param assay Assay to use for the analysis.
+#' @param st.logfc Log fold change threshold for marker identification.
+#' @param st.pct Minimum percentage of cells expressing the gene.
+#' @return A list containing main markers and region specific markers.
+#' @export
+#' @import tidyverse
+#' @import Seurat
+#' @examples
+#' \dontrun{
+#' prepareMIAst(stRNA = stRNA, group = 'celltype', assay = 'SCT')
+#' }
+prepareMIAst <- function(stRNA, group = 'celltype', assay = 'SCT', st.logfc = 0.5, st.pct = 0.2) {
+  DefaultAssay(stRNA) <- assay
+
+  region_marker <- FindAllMarkers(stRNA, logfc.threshold = st.logfc, only.pos = TRUE, min.pct = st.pct)
+  region_marker$d <- region_marker$pct.1 - region_marker$pct.2
+
+  region_main_marker <- subset(region_marker, avg_log2FC > st.logfc & p_val_adj < 0.05 & d > st.pct)
+  region_main_marker <- region_main_marker %>% arrange(cluster, desc(avg_log2FC))
+  region_main_marker <- as.data.frame(region_main_marker)
+  region_main_marker$cluster <- paste('spatial', region_main_marker$cluster, sep = '_')
+
+  region_specific <- region_main_marker[, c("cluster", "gene")]
+  colnames(region_specific)[1] <- "region"
+
+  res <- list(region_main_marker, region_specific)
+  names(res) <- c('region_main_marker', 'region_specific')
+
+  return(res)
+}
+
+# ============== runMIA
+
+#' @title Run Marker Interaction Analysis
+#' @description This function performs marker interaction analysis using spatial and single cell data.
+#' @param sp.diff Data frame of spatial region specific markers.
+#' @param sc.diff Data frame of single cell type specific markers.
+#' @param sample Sample name for the output files.
+#' @param outdir Directory to save the output results.
+#' @return None
+#' @export
+#' @import clusterProfiler
+#' @import ggplot2
+#' @import foreach
+#' @import ComplexHeatmap
+#' @import circlize
+#' @examples
+#' \dontrun{
+#' runMIA(sp.diff = sp.diff, sc.diff = sc.diff, sample = 'sample1', outdir = './output_data/')
+#' }
+runMIA <- function(sp.diff, sc.diff, sample, outdir) {
+  PVALUE.CUTOFF <- 1
+  QVALUE.CUTOFF <- 1
+  MIN.GSSIZE <- 1
+  MAX.GSSIZE <- 10000
+  PADJUST.METHOD <- "BH"
+
+  library(clusterProfiler)
+  library(ggplot2)
+  library(foreach)
+  library(ComplexHeatmap)
+  library(circlize)
+
+  enrich.list <- list()
+
+  TERM2NAME <- data.frame(term = sp.diff$region, name = sp.diff$region, row.names = NULL, stringsAsFactors = FALSE)
+  TERM2GENE <- data.frame(sp.diff, row.names = NULL, stringsAsFactors = FALSE)
+
+  gmt.annot <- list(term2gene = TERM2GENE, term2name = TERM2NAME)
+  clusters.list <- unique(sc.diff$celltype)
+
+  for (each.cluster in clusters.list) {
+    diff.gene <- as.character(sc.diff[which(sc.diff$celltype == each.cluster), ]$gene)
+
+    enrich <- enricher(
+      gene = diff.gene,
+      TERM2GENE = gmt.annot$term2gene,
+      TERM2NAME = gmt.annot$term2name,
+      pAdjustMethod = PADJUST.METHOD,
+      pvalueCutoff = PVALUE.CUTOFF,
+      qvalueCutoff = QVALUE.CUTOFF,
+      minGSSize = MIN.GSSIZE,
+      maxGSSize = MAX.GSSIZE
+    )
+
+    enrich.res <- enrich[, c(2, 5, 6)]
+    enrich.res['sc.celltpye'] <- each.cluster
+    enrich.res['ES'] <- -log(enrich.res$p.adjust)
+    enrich.list[[each.cluster]] <- enrich.res
+  }
+
+  data <- enrich.list[[1]]
+  for (i in 2:length(enrich.list)) {
+    data <- rbind(data, enrich.list[[i]])
+  }
+
+  write.csv(data, file = paste(outdir, 'MIA.Result.csv', sep = '/'), quote = FALSE, row.names = FALSE)
+
+  all.terms <- NULL
+  for (x in enrich.list) {
+    if (class(x) != "logical") {
+      indices <- which(!rownames(x) %in% names(all.terms))
+      new.terms <- x$Description[indices]
+      names(new.terms) <- rownames(x)[indices]
+      all.terms <- c(all.terms, new.terms)
+    }
+  }
+
+  padj.df <- foreach(x = enrich.list, .combine = rbind) %do% {
+    if (class(x) != "logical") {
+      padj <- x[names(all.terms), "p.adjust"]
+      padj[is.na(padj)] <- 1
+    } else {
+      padj <- rep(1, length(all.terms))
+    }
+    names(padj) <- names(all.terms)
+    return(padj)
+  }
+  rownames(padj.df) <- names(enrich.list)
+  padj.df <- t(padj.df)
+
+  min.qadj.terms <- apply(padj.df, 1, min)
+  min.qadj.terms <- sort(min.qadj.terms)
+  indices <- which(min.qadj.terms < 0.05 & 1:length(min.qadj.terms) <= 20)
+  if (length(indices) == 0) {
+    indices <- 1:min(20, length(min.qadj.terms))
+  }
+  plot.terms <- names(min.qadj.terms)[indices]
+
+  if (length(plot.terms) > 1) {
+    plot.data <- padj.df[plot.terms, ]
+    plot.data <- -log10(plot.data)
+    plot.data[plot.data > 8] <- 8
+    plot.data <- plot.data[1:min(nrow(plot.data), 20), ]
+
+    ora.pal <- colorRampPalette(c("#FFFFFF", "#D96354", "#500019"))
+
+    ht <- Heatmap(plot.data,
+                  col = colorRamp2(breaks = 0:8, colors = ora.pal(9)),
+                  column_title = "cluster",
+                  column_title_side = "bottom",
+                  rect_gp = gpar(col = "black"),
+                  show_row_names = FALSE,
+                  heatmap_legend_param = list(
+                    title = "Pvalue adjust\n   (-log10)",
+                    title_position = "leftcenter",
+                    border = NULL,
+                    at = seq(0, 8, 2),
+                    labels = c(0, 2, 4, 6, ">8"),
+                    legend_width = unit(0.5, "npc"),
+                    legend_direction = "horizontal"))
+
+    width.genename <- min(max(nchar(all.terms[plot.terms])) / 5, 10)
+    genename <- rowAnnotation(pct = row_anno_text(all.terms[plot.terms], just = "left",
+                                                  offset = unit(0, "npc"), gp = gpar(col = "black", fontsize = 9)), width = unit(width.genename, "cm"))
+
+    png(file.path(outdir, paste(prefix, ".cluster.MIA.enrich.heatmap.png", sep = "")), type = "cairo-png", width = 10 * 200, height = 6 * 200, res = 200)
+    draw(ht + genename, heatmap_legend_side = "bottom")
+    dev.off()
+
+    pdf(file.path(outdir, paste(prefix, ".cluster.MIA.enrich.heatmap.pdf", sep = "")), width = 10, height = 6)
+    draw(ht + genename, heatmap_legend_side = "bottom")
+    dev.off()
+  }
+}

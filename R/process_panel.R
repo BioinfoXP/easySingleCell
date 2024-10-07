@@ -1803,6 +1803,8 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 RunInferCNVAnalysis <- function(infercnv_path = './output_data/inferCNV/',
                                 gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                 ref_group_names,
+                                analysis_mode = "subcluster",
+                                HMM_report_by = "subcluster",
                                 name = 'infer_run',
                                 num_threads = 12) {
   # Load data for InferCNV
@@ -1823,6 +1825,7 @@ RunInferCNVAnalysis <- function(infercnv_path = './output_data/inferCNV/',
 
   # Run InferCNV analysis
   infercnv_obj <- infercnv::run(infercnv_obj, cutoff = 0.1, out_dir = out_path,
+                                analysis_mode = analysis_mode,  HMM_report_by = HMM_report_by,
                                 no_prelim_plot = TRUE, cluster_by_groups = TRUE,
                                 denoise = TRUE, HMM = FALSE, min_cells_per_gene = 10,
                                 num_threads = num_threads, write_expr_matrix = TRUE)

@@ -13,6 +13,8 @@ runInferCNVPipeline(
   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package =
     "easySingleCell"),
   ref_group_names,
+  analysis_mode = "subcluster",
+  HMM_report_by = "subcluster",
   ref_cell_name,
   obs_cell_name,
   ref_group,
@@ -94,6 +96,8 @@ results <- runInferCNVPipeline(
   ref_group = "immune",
   obs_group = "epithelial",
   k_clusters = 5,
+  analysis_mode = "subcluster",
+  HMM_report_by = "subcluster",
   heatmap_colors = c("#2166ac", "white", "#b2182b"),
   cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
   num_threads = 16

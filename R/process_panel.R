@@ -1810,8 +1810,10 @@ PrepareDataForInferCNV <- function(sce_epi, sce_refer, celltype = 'celltype',
 RunInferCNVAnalysis <- function(infercnv_path = './output_data/inferCNV/',
                                 gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                 ref_group_names,
-                                analysis_mode = "subcluster",
+                                analysis_mode = "sample",
                                 HMM_report_by = "subcluster",
+                                denoise = TRUE, HMM = FALSE,
+                                cluster_by_groups = TRUE,
                                 name = 'infer_run',
                                 num_threads = 12, ...) {
   # Check if the analysis has already been done
@@ -1836,8 +1838,8 @@ RunInferCNVAnalysis <- function(infercnv_path = './output_data/inferCNV/',
   # Run InferCNV analysis
   infercnv_obj <- infercnv::run(infercnv_obj, cutoff = 0.1, out_dir = out_path,
                                 analysis_mode = analysis_mode, HMM_report_by = HMM_report_by,
-                                no_prelim_plot = TRUE, cluster_by_groups = TRUE,
-                                denoise = TRUE, HMM = FALSE, min_cells_per_gene = 10,
+                                no_prelim_plot = TRUE, cluster_by_groups = cluster_by_groups,
+                                denoise = denoise, HMM = HMM, min_cells_per_gene = 10,
                                 num_threads = num_threads, write_expr_matrix = TRUE, ...)
 
   # Save the InferCNV object
@@ -2062,7 +2064,7 @@ runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
                                 infercnv_path = './output_data/', name = 'infer_run',
                                 gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package = "easySingleCell"),
                                 ref_group_names,
-                                analysis_mode = "subcluster",
+                                analysis_mode = "sample",
                                 HMM_report_by = "subcluster",
                                 cluster_by_group=TRUE,
                                 cluster_references=TRUE,
@@ -2092,10 +2094,10 @@ runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
     ref_group_names = ref_group_names,
     name = prepared_data$name,
     num_threads = num_threads,
-    analysis_mode,
-    HMM_report_by,
-    cluster_by_group,
-    cluster_references,...
+    analysis_mode = analysis_mode,
+    HMM_report_by = HMM_report_by,
+    cluster_by_group = cluster_by_group,
+    cluster_references=cluster_references,...
   )
 
   # Step 3: Cluster and Visualize InferCNV Results

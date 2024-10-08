@@ -12,7 +12,8 @@ RunInferCNVAnalysis(
   analysis_mode = "subcluster",
   HMM_report_by = "subcluster",
   name = "infer_run",
-  num_threads = 12
+  num_threads = 12,
+  ...
 )
 }
 \arguments{

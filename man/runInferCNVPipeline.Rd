@@ -22,7 +22,8 @@ runInferCNVPipeline(
   k_clusters = 5,
   heatmap_colors = c("#2166ac", "white", "#b2182b"),
   cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
-  num_threads = 12
+  num_threads = 12,
+  ...
 )
 }
 \arguments{

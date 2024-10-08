@@ -15,6 +15,8 @@ runInferCNVPipeline(
   ref_group_names,
   analysis_mode = "subcluster",
   HMM_report_by = "subcluster",
+  cluster_by_group = TRUE,
+  cluster_references = TRUE,
   ref_cell_name,
   obs_cell_name,
   ref_group,
@@ -57,6 +59,8 @@ runInferCNVPipeline(
 cluster_colors must equal to k_clusters!}
 
 \item{num_threads}{Number of threads to use for the analysis. Default num_threads = 12.}
+
+\item{...}{Same with the infercnv::run.}
 }
 \value{
 A list containing the InferCNV object and the clustering results.
@@ -100,8 +104,8 @@ results <- runInferCNVPipeline(
   analysis_mode = "subcluster",
   HMM_report_by = "subcluster",
   heatmap_colors = c("#2166ac", "white", "#b2182b"),
-  cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#843C39"),
-  num_threads = 16
+  cluster_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"),
+  num_threads = 12
 )
 }
 }

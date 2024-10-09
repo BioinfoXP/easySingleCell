@@ -13,10 +13,10 @@ runInferCNVPipeline(
   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package =
     "easySingleCell"),
   ref_group_names,
-  analysis_mode = "sample",
-  HMM_report_by = "subcluster",
+  cutoff = 0.1,
   cluster_by_group = TRUE,
-  cluster_references = TRUE,
+  denoise = TRUE,
+  HMM = TRUE,
   ref_cell_name,
   obs_cell_name,
   ref_group,

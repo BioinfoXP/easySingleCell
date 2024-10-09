@@ -9,10 +9,9 @@ RunInferCNVAnalysis(
   gene_order_file = system.file("extdata", "hg38_gencode_v27.txt", package =
     "easySingleCell"),
   ref_group_names,
-  analysis_mode = "sample",
-  HMM_report_by = "subcluster",
+  cutoff = 0.1,
   denoise = TRUE,
-  HMM = FALSE,
+  HMM = TRUE,
   cluster_by_groups = TRUE,
   name = "infer_run",
   num_threads = 12,

@@ -1304,21 +1304,29 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
       stop("The 'species' parameter must be either 'human' or 'mouse'.")
     }
 
+    names(res) = names(ll)
     save(res, file = file.path(output_data_dir, "hdWGCNA_hub_genes_GO.Rdata"))
 
     # Generate and save GO enrichment dot plots
     # Cite: https://guangchuangyu.github.io/cn/2017/07/clusterprofiler-dotplot/
-    library(purrr)
-    map_if(res, ~ !is.null(.x), ~ {
-      tmp <- dotplot(.x) +
-        ggtitle(names(ll)[.y]) +
-        theme(plot.title = element_text(hjust = 0.5)) +
-        ggplot2::scale_color_continuous(low='purple', high='green')
+    lapply(1:length(res), function(x) {
+      if (!is.null(res[[x]])) {
+        tryCatch({
+          tmp <- dotplot(res[[x]]) +
+            ggtitle(names(res)[x]) +
+            theme(plot.title = element_text(hjust = 0.5)) +
+            ggplot2::scale_color_continuous(low='purple', high='green')
 
-      export::graph2pdf(tmp,
-                        file = paste0(output_data_dir, 'WGCNA-keyModule', names(ll)[.y], '.pdf'),
-                        width = 6, height = 5)
-    }, .else = ~ message(paste("No GO enrichment results for module:", names(ll)[.y])))
+          export::graph2pdf(tmp,
+                            file = paste0(output_data_dir, 'WGCNA-keyModule', names(res)[x], '.pdf'),
+                            width = 6, height = 5)
+        }, error = function(e) {
+          message("An error occurred while processing module:", names(res)[x])
+        })
+      } else {
+        message(paste("No GO enrichment results for module:", names(res)[x]))
+      }
+    })
 
     return(res)
   }

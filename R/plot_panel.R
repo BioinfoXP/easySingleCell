@@ -2,6 +2,7 @@
 #' Select Colors from Predefined Palettes
 #'
 #' This function selects colors from predefined palettes and allows linear interpolation of colors.
+#'
 #' Cite from: https://mp.weixin.qq.com/s/4ztyLaLILZ5CJMp94MkeBA
 #' @param palette_num An integer from 1 to 100 indicating the chosen palette.
 #' @param n An integer specifying the number of colors to generate. If NULL, the original palette is returned.

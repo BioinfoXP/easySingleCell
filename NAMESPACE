@@ -2,6 +2,7 @@
 
 S3method(ComputeModuleScore,Seurat)
 S3method(ComputeModuleScore,default)
+export(Best100)
 export(CalcStats)
 export(ComputeModuleScore)
 export(ImportPyscenicLoom)

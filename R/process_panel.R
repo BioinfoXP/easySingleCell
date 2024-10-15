@@ -1308,19 +1308,18 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
 
     # Generate and save GO enrichment dot plots
     # Cite: https://guangchuangyu.github.io/cn/2017/07/clusterprofiler-dotplot/
-    lapply(1:length(res), function(x) {
-      if (!is.null(res[[x]])) {
-        tmp <- dotplot(res[[x]]) +
-          ggtitle(names(ll)[x]) +
-          theme(plot.title = element_text(hjust = 0.5))+
-          ggplot2::scale_color_continuous(low='purple', high='green')
-        export::graph2pdf(tmp,
-                          file = paste0(output_data_dir, 'WGCNA-keyModule', names(ll)[x], '.pdf'),
-                          width = 6, height = 5)
-      } else {
-        message(paste("No GO enrichment results for module:", names(ll)[x]))
-      }
-    })
+    library(purrr)
+    map_if(res, ~ !is.null(.x), ~ {
+      tmp <- dotplot(.x) +
+        ggtitle(names(ll)[.y]) +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        ggplot2::scale_color_continuous(low='purple', high='green')
+
+      export::graph2pdf(tmp,
+                        file = paste0(output_data_dir, 'WGCNA-keyModule', names(ll)[.y], '.pdf'),
+                        width = 6, height = 5)
+    }, .else = ~ message(paste("No GO enrichment results for module:", names(ll)[.y])))
+
     return(res)
   }
 }

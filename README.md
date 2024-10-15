@@ -104,8 +104,7 @@ if (!requireNamespace('hdWGCNA', quietly = TRUE)) devtools::install_github('smor
 if (!requireNamespace('ktplots', quietly = TRUE)) devtools::install_github('zktuong/ktplots')
 if (!requireNamespace('scMetabolism', quietly = TRUE)) devtools::install_github('wu-yc/scMetabolism')
 if (!requireNamespace('VISION', quietly = TRUE)) devtools::install_github('YosefLab/VISION@v2.1.0')
-if (!requireNamespace('copykat', quietly = TRUE))
-devtools::install_github("navinlabcode/copykat")
+if (!requireNamespace('copykat', quietly = TRUE)) devtools::install_github("navinlabcode/copykat")
 ```
 
 ### Install easySingleCell

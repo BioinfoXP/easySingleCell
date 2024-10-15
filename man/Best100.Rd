@@ -16,6 +16,8 @@ A character vector of colors in hexadecimal format.
 }
 \description{
 This function selects colors from predefined palettes and allows linear interpolation of colors.
+}
+\details{
 Cite from: https://mp.weixin.qq.com/s/4ztyLaLILZ5CJMp94MkeBA
 }
 \examples{

@@ -1,10 +1,10 @@
 Package: easySingleCell
-Title: This is an R package to fast the bioinformatics analysis for single cell
-Version: 0.0.4
+Title: This is an R package to fast the bioinformatics analysis for bulk-seq, scRNA-seq, stRNA-seq
+Version: 0.0.5
 Authors@R: 
     person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: Fast your bioinformatics analysis for scRNA-seq and TCGA data based on easySingleCell!
+Description: Fast your bioinformatics analysis for bulk-seq, scRNA-seq, stRNA-seq data based on easySingleCell!
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

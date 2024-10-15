@@ -8,8 +8,10 @@ runCytoTRACEAnalysis(
   scRNA,
   celltype = "celltype",
   output_data_dir = "./output_data/",
-  output_figure_dir = "./output_data/",
-  ncores = 5
+  output_figure_dir = "./output_figure/",
+  emb = "umap",
+  ncores = 5,
+  force_run = FALSE
 )
 }
 \arguments{
@@ -19,15 +21,20 @@ runCytoTRACEAnalysis(
 
 \item{output_data_dir}{Directory to save the output data. Default is "./output_data/".}
 
-\item{output_figure_dir}{Directory to save the output figures. Default is "./output_data/".}
+\item{output_figure_dir}{Directory to save the output figures. Default is "./output_figure/".}
+
+\item{emb}{A character string specifying the reduction method (e.g., 'umap', 'tsne') to use for plotting. Default is 'umap'.}
 
 \item{ncores}{Number of cores to use for CytoTRACE analysis. Default is 5.}
+
+\item{force_run}{Logical, if TRUE, force re-run CytoTRACE analysis even if results already exist. Default is FALSE.}
 }
 \description{
 This function runs CytoTRACE analysis on a Seurat object and saves the results and plots.
+If the results already exist, it will skip the analysis and directly generate the plots.
 }
 \examples{
 \dontrun{
-runCytoTRACEAnalysis(scRNA = your_seurat_object, celltype = 'celltype', output_data_dir = "./output_data/", output_figure_dir = "./output_data/", ncores = 5)
+runCytoTRACEAnalysis(scRNA = your_seurat_object, celltype = 'celltype', output_data_dir = "./output_data/", output_figure_dir = "./output_figure/", emb = 'umap', ncores = 5, force_run = FALSE)
 }
 }

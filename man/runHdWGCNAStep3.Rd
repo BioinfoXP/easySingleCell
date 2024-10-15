@@ -17,11 +17,11 @@ runHdWGCNAStep3(
 \arguments{
 \item{sce}{A Seurat object after hdWGCNA step 2.}
 
-\item{output_figure_dir}{A character string specifying the directory to save output figures.}
+\item{output_figure_dir}{A character string specifying the directory to save output figures. Default is './output_figure/'.}
 
-\item{output_data_dir}{A character string specifying the directory to save output data files.}
+\item{output_data_dir}{A character string specifying the directory to save output data files. Default is './output_data/'.}
 
-\item{dotplot_group}{A character string specifying the group by parameter for dotplot. Default is "celltype".}
+\item{dotplot_group}{A character string specifying the group by parameter for dotplot. Default is 'celltype'.}
 
 \item{n_hubs}{An integer specifying the number of hub genes to extract and save. Default is 50.}
 
@@ -30,7 +30,7 @@ runHdWGCNAStep3(
 \item{species}{A character string specifying the species. Must be either 'human' or 'mouse'. Default is 'human'.}
 }
 \value{
-None. The function saves plots and hub genes to the specified directories.
+None. The function saves plots and hub genes to the specified directories. If \code{do_GO_enrich} is TRUE, returns GO enrichment results.
 }
 \description{
 This function performs the third step of hdWGCNA analysis, including plotting the dendrogram,

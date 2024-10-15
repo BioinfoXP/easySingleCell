@@ -375,21 +375,28 @@ runScGSEA <- function(scRNA, ident1, ident2, logfc_threshold = 0.1,
 #' Run CytoTRACE Analysis
 #'
 #' This function runs CytoTRACE analysis on a Seurat object and saves the results and plots.
+#' If the results already exist, it will skip the analysis and directly generate the plots.
 #'
 #' @param scRNA A Seurat object.
 #' @param celltype A character string specifying the column name in `scRNA@meta.data` that contains cell type information. Default is 'celltype'.
 #' @param output_data_dir Directory to save the output data. Default is "./output_data/".
-#' @param output_figure_dir Directory to save the output figures. Default is "./output_data/".
+#' @param output_figure_dir Directory to save the output figures. Default is "./output_figure/".
+#' @param emb A character string specifying the reduction method (e.g., 'umap', 'tsne') to use for plotting. Default is 'umap'.
 #' @param ncores Number of cores to use for CytoTRACE analysis. Default is 5.
+#' @param force_run Logical, if TRUE, force re-run CytoTRACE analysis even if results already exist. Default is FALSE.
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' runCytoTRACEAnalysis(scRNA = your_seurat_object, celltype = 'celltype', output_data_dir = "./output_data/", output_figure_dir = "./output_data/", ncores = 5)
+#' runCytoTRACEAnalysis(scRNA = your_seurat_object, celltype = 'celltype', output_data_dir = "./output_data/", output_figure_dir = "./output_figure/", emb = 'umap', ncores = 5, force_run = FALSE)
 #' }
 runCytoTRACEAnalysis <- function(scRNA, celltype = 'celltype',
-                                 output_data_dir = "./output_data/", output_figure_dir = "./output_data/", ncores = 5) {
+                                 output_data_dir = "./output_data/",
+                                 output_figure_dir = "./output_figure/",
+                                 emb = 'umap',
+                                 ncores = 5,
+                                 force_run = FALSE) {
   # Check if necessary packages are installed
   required_packages <- c("Seurat", "CytoTRACE")
   lapply(required_packages, function(pkg) {
@@ -426,21 +433,46 @@ runCytoTRACEAnalysis <- function(scRNA, celltype = 'celltype',
   if (!is.character(output_figure_dir) || length(output_figure_dir) != 1) {
     stop("The 'output_figure_dir' parameter must be a single character string.")
   }
+  if (!is.character(emb) || length(emb) != 1) {
+    stop("The 'emb' parameter must be a single character string.")
+  }
   if (!is.numeric(ncores) || length(ncores) != 1 || ncores <= 0) {
     stop("The 'ncores' parameter must be a single positive number.")
   }
+  if (!is.logical(force_run) || length(force_run) != 1) {
+    stop("The 'force_run' parameter must be a single logical value.")
+  }
 
-  # Run CytoTRACE analysis
-  phe <- scRNA@meta.data[, celltype]
-  phe <- as.character(phe)
-  names(phe) <- rownames(scRNA@meta.data)
+  # Define the path to the CytoTRACE results file
+  results_file <- file.path(output_data_dir, "Cytotrace_results.Rdata")
 
-  mat_3k <- as.matrix(scRNA@assays$RNA@counts)
+  # Check if results already exist and load them if they do
+  if (file.exists(results_file) && !force_run) {
+    load(results_file)
+    message("CytoTRACE results loaded from existing file.")
+  } else {
+    # Run CytoTRACE analysis
+    phe <- scRNA@meta.data[, celltype]
+    phe <- as.character(phe)
+    names(phe) <- rownames(scRNA@meta.data)
 
-  results <- CytoTRACE(mat = mat_3k, ncores = ncores)
-  save(results, file = file.path(output_data_dir, "Cytotrace_results.Rdata"))
+    mat_3k <- as.matrix(scRNA@assays$RNA@counts)
 
-  plotCytoTRACE(results, outputDir = output_figure_dir, emb = scRNA@reductions$umap@cell.embeddings)
+    results <- CytoTRACE(mat = mat_3k, ncores = ncores)
+    save(results, file = results_file)
+    message("CytoTRACE analysis completed and results saved.")
+  }
+
+  # Validate the chosen embedding method
+  if (!emb %in% names(scRNA@reductions)) {
+    stop(paste("The specified embedding method '", emb, "' does not exist in the Seurat object reductions.", sep = ""))
+  }
+
+  # Plot CytoTRACE results
+  plotCytoTRACE(results, outputDir = output_figure_dir,
+                emb = scRNA@reductions[[emb]]@cell.embeddings,
+                phenotype = phe)
+  message("CytoTRACE plots generated.")
 }
 
 
@@ -1158,19 +1190,22 @@ runHdWGCNAStep2 <- function(sce,
 #' and saving hub genes to a CSV file.
 #'
 #' @param sce A Seurat object after hdWGCNA step 2.
-#' @param output_figure_dir A character string specifying the directory to save output figures.
-#' @param output_data_dir A character string specifying the directory to save output data files.
-#' @param dotplot_group A character string specifying the group by parameter for dotplot. Default is "celltype".
+#' @param output_figure_dir A character string specifying the directory to save output figures. Default is './output_figure/'.
+#' @param output_data_dir A character string specifying the directory to save output data files. Default is './output_data/'.
+#' @param dotplot_group A character string specifying the group by parameter for dotplot. Default is 'celltype'.
 #' @param n_hubs An integer specifying the number of hub genes to extract and save. Default is 50.
 #' @param do_GO_enrich A logical value indicating whether to perform GO enrichment analysis. Default is FALSE.
 #' @param species A character string specifying the species. Must be either 'human' or 'mouse'. Default is 'human'.
-#' @return None. The function saves plots and hub genes to the specified directories.
+#' @return None. The function saves plots and hub genes to the specified directories. If `do_GO_enrich` is TRUE, returns GO enrichment results.
 #' @export
 #' @import Seurat
 #' @import patchwork
 #' @importFrom magrittr %>%
 #' @importFrom ggplot2 scale_color_gradientn
 #' @importFrom qs qread
+#' @importFrom clusterProfiler enrichGO
+#' @importFrom org.Hs.eg.db org.Hs.eg.db
+#' @importFrom org.Mm.eg.db org.Mm.eg.db
 #' @examples
 #' \dontrun{
 #' runHdWGCNAStep3(
@@ -1251,7 +1286,8 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
     hub_df <- hub_df %>%
       filter(module != 'grey')
     ll <- split(hub_df, hub_df$module, drop = FALSE)
-    # check species
+
+    # Check species and perform GO enrichment
     if (species == "human") {
       library(org.Hs.eg.db)
       res <- lapply(1:length(ll), function(x) {
@@ -1264,16 +1300,26 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
         enrichGO(gene = ll[[x]][, 1], OrgDb = org.Mm.eg.db, keyType = 'SYMBOL', ont = 'BP',
                  pvalueCutoff = 0.05, pAdjustMethod = 'BH')
       })
+    } else {
+      stop("The 'species' parameter must be either 'human' or 'mouse'.")
     }
 
     save(res, file = file.path(output_data_dir, "hdWGCNA_hub_genes_GO.Rdata"))
+
+    # Generate and save GO enrichment dot plots
+    # Cite: https://guangchuangyu.github.io/cn/2017/07/clusterprofiler-dotplot/
     lapply(1:length(res), function(x) {
-      tmp <- dotplot(res[[x]]) +
-        ggtitle(names(ll)[x]) +
-        theme(plot.title = element_text(hjust = 0.5))
-      export::graph2pdf(tmp,
-                        file = paste0(output_data_dir, 'WGCNA-keyModule', names(ll)[x], '.pdf'),
-                        width = 6, height = 5)
+      if (!is.null(res[[x]])) {
+        tmp <- dotplot(res[[x]]) +
+          ggtitle(names(ll)[x]) +
+          theme(plot.title = element_text(hjust = 0.5))+
+          ggplot2::scale_color_continuous(low='purple', high='green')
+        export::graph2pdf(tmp,
+                          file = paste0(output_data_dir, 'WGCNA-keyModule', names(ll)[x], '.pdf'),
+                          width = 6, height = 5)
+      } else {
+        message(paste("No GO enrichment results for module:", names(ll)[x]))
+      }
     })
     return(res)
   }
@@ -2114,6 +2160,83 @@ runInferCNVPipeline <- function(sce_epi, sce_refer, celltype = 'celltype',
   return(list(infercnv_obj = infercnv_obj, clustering_results = clustering_results))
 }
 
+# ============= 16. RunCopyKAT ========
+
+#' Run CopyKAT Analysis
+#'
+#' This function performs CopyKAT analysis on a given Seurat object and saves the results.
+#'
+#' @param seurat_obj A Seurat object containing the RNA assay with count data.
+#' @param output_dir A character string specifying the directory to save CopyKAT output. Default is './output_data/copykat'.
+#' @param sam_name A character string specifying the sample name for CopyKAT. Default is 'sample'.
+#' @param id_type A character string specifying the ID type for CopyKAT. Default is 'S'.
+#' @param cell_line A character string specifying whether the data is from a cell line. Default is 'no'.
+#' @param ngene_chr An integer specifying the minimum number of genes per chromosome. Default is 1.
+#' @param win_size An integer specifying the window size for CopyKAT. Default is 25.
+#' @param KS_cut A numeric value specifying the KS cutoff for CopyKAT. Default is 0.15.
+#' @param distance A character string specifying the distance metric for CopyKAT. Default is 'euclidean'.
+#' @param n_cores An integer specifying the number of cores to use for CopyKAT. Default is 1.
+#' @param ... Additional parameters passed to the `copykat` function.
+#' @return A Seurat object with CopyKAT prediction results added to its metadata.
+#' @export
+#' @import Seurat
+#' @import qs
+#' @import copykat
+#' @examples
+#' \dontrun{
+#' sce.tumor = RunCopyKAT(
+#'   seurat_obj = sce.tumor,
+#'   output_dir = './output_data/copykat',
+#'   sam_name = 'hepatocyte',
+#'   n_cores = 30
+#' )
+#' }
+RunCopyKAT <- function(seurat_obj, output_dir = './output_data/copykat', sam_name = 'sample', id_type = 'S', cell_line = 'no', ngene_chr = 1, win_size = 25, KS_cut = 0.15, distance = 'euclidean', n_cores = 1, ...) {
+  # Load necessary libraries
+  library(Seurat)
+  library(qs)
+  library(copykat)
+
+  # Save the current working directory
+  cwd <- getwd()
+
+  # Ensure output directory exists
+  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+
+  # Extract raw expression matrix from Seurat object
+  exp.rawdata <- seurat_obj@assays$RNA@counts
+
+  # Set working directory to output directory
+  setwd(output_dir)
+
+  # Run CopyKAT analysis with default and additional parameters
+  copykat_result <- copykat(
+    rawmat = exp.rawdata,
+    id.type = id_type,
+    cell.line = cell_line,
+    ngene.chr = ngene_chr,
+    win.size = win_size,
+    KS.cut = KS_cut,
+    sam.name = sam_name,
+    distance = distance,
+    n.cores = n_cores,
+    ...
+  )
+
+  # Reset working directory to original
+  setwd(cwd)
+
+  # Extract prediction results
+  pred_results <- data.frame(copykat_result$prediction)
+
+  # Add prediction results to Seurat object metadata
+  seurat_obj <- AddMetaData(seurat_obj, metadata = pred_results, col.name = 'copykat_prediction')
+
+  # Save results to output directory
+  save(copykat_result, pred_results, file = file.path(output_dir, 'copykat_results.Rdata'))
+
+  return(seurat_obj)
+}
 
 
 

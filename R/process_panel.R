@@ -447,15 +447,15 @@ runCytoTRACEAnalysis <- function(scRNA, celltype = 'celltype',
   results_file <- file.path(output_data_dir, "Cytotrace_results.Rdata")
 
   # Check if results already exist and load them if they do
+  phe <- scRNA@meta.data[, celltype]
+  phe <- as.character(phe)
+  names(phe) <- rownames(scRNA@meta.data)
+
   if (file.exists(results_file) && !force_run) {
     load(results_file)
     message("CytoTRACE results loaded from existing file.")
   } else {
     # Run CytoTRACE analysis
-    phe <- scRNA@meta.data[, celltype]
-    phe <- as.character(phe)
-    names(phe) <- rownames(scRNA@meta.data)
-
     mat_3k <- as.matrix(scRNA@assays$RNA@counts)
 
     results <- CytoTRACE(mat = mat_3k, ncores = ncores)

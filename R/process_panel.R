@@ -1277,7 +1277,9 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
   sce <- qread(file.path(output_data_dir, "sce_hdWGCNA_step2.qs"))
 
   # Get hub genes and save to file
-  hub_df <- GetHubGenes(sce, n_hubs = n_hubs)
+  hub_df <- GetHubGenes(sce, n_hubs = n_hubs) %>%
+            filter(module != 'grey')
+  hub_df$module <- as.character(hub_df$module)
   hub_file <- file.path(output_data_dir, "hdWGCNA_hub_genes.csv")
   write.csv(hub_df, file = hub_file, row.names = FALSE)
 

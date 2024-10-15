@@ -1196,6 +1196,7 @@ runHdWGCNAStep2 <- function(sce,
 #' @param n_hubs An integer specifying the number of hub genes to extract and save. Default is 50.
 #' @param do_GO_enrich A logical value indicating whether to perform GO enrichment analysis. Default is FALSE.
 #' @param species A character string specifying the species. Must be either 'human' or 'mouse'. Default is 'human'.
+#' @param rerun_GO_enrich A logical value indicating whether to rerun GO enrichment analysis if results already exist. Default is FALSE.
 #' @return None. The function saves plots and hub genes to the specified directories. If `do_GO_enrich` is TRUE, returns GO enrichment results.
 #' @export
 #' @import Seurat
@@ -1215,7 +1216,7 @@ runHdWGCNAStep2 <- function(sce,
 #'   n_hubs = 50
 #' )
 #' }
-runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', dotplot_group = 'celltype', n_hubs = 50, do_GO_enrich = FALSE, species = 'human') {
+runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_data_dir = './output_data/', dotplot_group = 'celltype', n_hubs = 50, do_GO_enrich = FALSE, species = 'human', rerun_GO_enrich = FALSE) {
   # Load necessary libraries
   library(Seurat)
   library(patchwork)
@@ -1282,33 +1283,40 @@ runHdWGCNAStep3 <- function(sce, output_figure_dir = './output_figure/', output_
 
   # If do GO enrichment analysis
   if (do_GO_enrich) {
-    library(clusterProfiler)
-    hub_df <- hub_df %>%
-      filter(module != 'grey')
-    ll <- split(hub_df, hub_df$module, drop = FALSE)
+    go_file <- file.path(output_data_dir, "hdWGCNA_hub_genes_GO.Rdata")
 
-    # Check species and perform GO enrichment
-    if (species == "human") {
-      library(org.Hs.eg.db)
-      res <- lapply(1:length(ll), function(x) {
-        enrichGO(gene = ll[[x]][, 1], OrgDb = org.Hs.eg.db, keyType = 'SYMBOL', ont = 'BP',
-                 pvalueCutoff = 0.05, pAdjustMethod = 'BH')
-      })
-    } else if (species == "mouse") {
-      library(org.Mm.eg.db)
-      res <- lapply(1:length(ll), function(x) {
-        enrichGO(gene = ll[[x]][, 1], OrgDb = org.Mm.eg.db, keyType = 'SYMBOL', ont = 'BP',
-                 pvalueCutoff = 0.05, pAdjustMethod = 'BH')
-      })
+    if (file.exists(go_file) && !rerun_GO_enrich) {
+      # Load existing GO enrichment results
+      load(go_file)
     } else {
-      stop("The 'species' parameter must be either 'human' or 'mouse'.")
+      # Perform GO enrichment analysis
+      library(clusterProfiler)
+      hub_df <- hub_df %>%
+        filter(module != 'grey')
+      ll <- split(hub_df, hub_df$module, drop = FALSE)
+
+      # Check species and perform GO enrichment
+      if (species == "human") {
+        library(org.Hs.eg.db)
+        res <- lapply(1:length(ll), function(x) {
+          enrichGO(gene = ll[[x]][, 1], OrgDb = org.Hs.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                   pvalueCutoff = 0.05, pAdjustMethod = 'BH')
+        })
+      } else if (species == "mouse") {
+        library(org.Mm.eg.db)
+        res <- lapply(1:length(ll), function(x) {
+          enrichGO(gene = ll[[x]][, 1], OrgDb = org.Mm.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                   pvalueCutoff = 0.05, pAdjustMethod = 'BH')
+        })
+      } else {
+        stop("The 'species' parameter must be either 'human' or 'mouse'.")
+      }
+
+      names(res) = names(ll)
+      save(res, file = go_file)
     }
 
-    names(res) = names(ll)
-    save(res, file = file.path(output_data_dir, "hdWGCNA_hub_genes_GO.Rdata"))
-
     # Generate and save GO enrichment dot plots
-    # Cite: https://guangchuangyu.github.io/cn/2017/07/clusterprofiler-dotplot/
     lapply(1:length(res), function(x) {
       if (!is.null(res[[x]])) {
         tryCatch({

@@ -11,7 +11,8 @@ runHdWGCNAStep3(
   dotplot_group = "celltype",
   n_hubs = 50,
   do_GO_enrich = FALSE,
-  species = "human"
+  species = "human",
+  rerun_GO_enrich = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ runHdWGCNAStep3(
 \item{do_GO_enrich}{A logical value indicating whether to perform GO enrichment analysis. Default is FALSE.}
 
 \item{species}{A character string specifying the species. Must be either 'human' or 'mouse'. Default is 'human'.}
+
+\item{rerun_GO_enrich}{A logical value indicating whether to rerun GO enrichment analysis if results already exist. Default is FALSE.}
 }
 \value{
 None. The function saves plots and hub genes to the specified directories. If \code{do_GO_enrich} is TRUE, returns GO enrichment results.

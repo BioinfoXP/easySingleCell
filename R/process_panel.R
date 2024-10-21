@@ -122,14 +122,20 @@ run_normalize <- function(seurat_obj, dims = 1:30, batch_var = "orig.ident") {
 }
 
 # ============== 3. Resolution by clusterTree ==============
+
 #' @title Generate and Save Clustree Plot
 #' @description This function generates and saves a clustree plot for a Seurat object across specified clustering resolutions.
 #' @param sce A Seurat object containing scRNA-seq data.
-#' @param resolutions A numeric vector specifying the clustering resolutions to analyze. Default is seq(0.1, 1.4, 0.2).
+#' @param resolutions A numeric vector specifying the clustering resolutions to analyze. Default is seq(0.2, 1, 0.2).
 #' @param prefix A character string specifying the prefix for clustering resolution columns. Default is "RNA_snn_res.".
-#' @param output_dir A character string specifying the directory to save the output. Default is "./output_figure/".
-#' @param output_filename A character string specifying the output filename for the clustree plot. Default is "clustree_plot.pdf".
-#' @return A ggplot object.
+#' @param data_output_dir A character string specifying the directory to save the output data. Default is "./output_data/".
+#' @param figure_output_dir A character string specifying the directory to save the output figure. Default is "./output_figure/".
+#' @param data_output_filename A character string specifying the output filename for the resolution data. Default is "resolution_data.Rdata".
+#' @param figure_output_filename A character string specifying the output filename for the clustree plot. Default is "clustree_plot.pdf".
+#' @param width A numeric value specifying the width of the output plot. Default is 8.
+#' @param height A numeric value specifying the height of the output plot. Default is 8.
+#' @param ... Additional parameters to pass to FindClusters.
+#' @return A list containing the resolution table and the clustree plot.
 #' @export
 #' @import Seurat
 #' @import clustree
@@ -140,35 +146,49 @@ run_normalize <- function(seurat_obj, dims = 1:30, batch_var = "orig.ident") {
 #' run_clustree(sce)
 #' }
 
-run_clustree <- function(sce, resolutions = seq(0.1, 1.4, 0.2), prefix = "RNA_snn_res.",
-                         output_dir = "./output_figure/", output_filename = "clustree_plot.pdf") {
+run_clustree <- function(sce, resolutions = seq(0.2, 1, 0.2), prefix = "RNA_snn_res.",
+                         data_output_dir = "./output_data/", figure_output_dir = "./output_figure/",
+                         data_output_filename = "resolution_data.Rdata",
+                         figure_output_filename = "clustree_plot.pdf",
+                         width = 8, height = 8, ...) {
   # Ensure necessary libraries are loaded
+  library(Seurat)
   library(clustree)
   library(ggplot2)
 
-  # Create output directory if it doesn't exist
-  if (!dir.exists(output_dir)) {
-    dir.create(output_dir, recursive = TRUE)
+  # Create output directories if they don't exist
+  if (!dir.exists(data_output_dir)) {
+    dir.create(data_output_dir, recursive = TRUE)
+  }
+  if (!dir.exists(figure_output_dir)) {
+    dir.create(figure_output_dir, recursive = TRUE)
   }
 
   # Loop through each resolution and perform clustering
   for (i in resolutions) {
-    sce <- FindClusters(object = sce, resolution = i)
+    print(i)
+    sce <- FindClusters(object = sce, resolution = i, ...)
   }
+
+  # Save the resolution table
+  res.table <- sce@meta.data
+  save(res.table, file = file.path(data_output_dir, data_output_filename))
 
   # Generate clustree plot
   clustree_plot <- clustree(sce, prefix = prefix)
 
   # Save the plot
-  ggsave(filename = file.path(output_dir, output_filename), plot = clustree_plot, width = 10, height = 10)
+  ggsave(filename = file.path(figure_output_dir, figure_output_filename), plot = clustree_plot, width = width, height = height)
 
-  # Return the plot
-  return(clustree_plot)
+  # Return the resolution table and the plot
+  return(list(resolution_table = res.table, clustree_plot = clustree_plot))
 }
 
 # Example usage
 # sce <- qread('./output_data/sce.qc.qs')
-# run_clustree(sce)
+# result <- run_clustree(sce)
+# resolution_table <- result$resolution_table
+# clustree_plot <- result$clustree_plot
 
 
 
@@ -187,7 +207,7 @@ run_clustree <- function(sce, resolutions = seq(0.1, 1.4, 0.2), prefix = "RNA_sn
 #' seu <- MarkDoubletsWrapper(seu = seu, PCs = 1:10, split.by = "orig.ident")
 #' }
 
-MarkDoubletsWrapper <- function(seu, PCs = 1:10, split.by = "orig.ident") {
+MarkDoubletsWrapper <- function(seu, PCs = 1:10, split.by = NULL) {
   # Ensure necessary libraries are loaded
   library(Seurat)
   library(DoubletFinder)

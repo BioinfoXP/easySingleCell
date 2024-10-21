@@ -6,20 +6,21 @@
 \usage{
 scVisFeaturePlot(
   scRNA,
-  feature,
+  features,
   reduction = "umap",
   pt.size = 1e-04,
   max.cutoff = 1.5,
   cols = c("#FFEFD5", "#E6E6FA", "#87CEFA", "#6495ED", "#4169E1", "#0000CD", "#000080"),
   title = NULL,
   ncol = NULL,
-  nrow = NULL
+  nrow = NULL,
+  ...
 )
 }
 \arguments{
 \item{scRNA}{A Seurat object containing single-cell data.}
 
-\item{feature}{A character string specifying the feature to be plotted.}
+\item{features}{A character string or vector specifying the feature(s) to be plotted.}
 
 \item{reduction}{A character string specifying the reduction method to be used (default is "umap").}
 
@@ -31,9 +32,11 @@ scVisFeaturePlot(
 
 \item{title}{A character string specifying the title of the plot. If NULL, the feature name will be used as the title.}
 
-\item{ncol}{A numeric value specifying the patchwork nrow (default is NULL).}
+\item{ncol}{A numeric value specifying the number of columns for the patchwork layout (default is NULL).}
 
-\item{nrow}{A numeric value specifying  the patchwork ncol (default is NULL).}
+\item{nrow}{A numeric value specifying the number of rows for the patchwork layout (default is NULL).}
+
+\item{...}{Additional parameters to be passed to Seurat's FeaturePlot function.}
 }
 \value{
 A ggplot/patchwork object representing the feature plot.
@@ -57,7 +60,7 @@ seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
 # Example feature plot
 plot <- scVisFeaturePlot(
   scRNA = seurat_obj,
-  feature = "CD3E",
+  features = "CD3E",
   reduction = "umap",
   pt.size = 0.5,
   max.cutoff = 1.5,

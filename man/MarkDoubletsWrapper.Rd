@@ -4,7 +4,7 @@
 \alias{MarkDoubletsWrapper}
 \title{Mark Doublets in Seurat Object}
 \usage{
-MarkDoubletsWrapper(seu, PCs = 1:10, split.by = "orig.ident")
+MarkDoubletsWrapper(seu, PCs = 1:10, split.by = NULL)
 }
 \arguments{
 \item{seu}{A Seurat object.}

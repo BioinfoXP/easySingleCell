@@ -3,14 +3,15 @@
 #' @title Feature Plot for Single-cell Data
 #' @description This function creates a feature plot for single-cell data using a specified reduction method.
 #' @param scRNA A Seurat object containing single-cell data.
-#' @param feature A character string specifying the feature to be plotted.
+#' @param features A character string or vector specifying the feature(s) to be plotted.
 #' @param reduction A character string specifying the reduction method to be used (default is "umap").
 #' @param pt.size A numeric value specifying the size of the points (default is 0.0001).
 #' @param max.cutoff A numeric value specifying the maximum cutoff for the feature values (default is 1.5).
 #' @param cols A vector of colors to be used for the plot.
 #' @param title A character string specifying the title of the plot. If NULL, the feature name will be used as the title.
-#' @param ncol A numeric value specifying the patchwork nrow (default is NULL).
-#' @param nrow A numeric value specifying  the patchwork ncol (default is NULL).
+#' @param ncol A numeric value specifying the number of columns for the patchwork layout (default is NULL).
+#' @param nrow A numeric value specifying the number of rows for the patchwork layout (default is NULL).
+#' @param ... Additional parameters to be passed to Seurat's FeaturePlot function.
 #' @return A ggplot/patchwork object representing the feature plot.
 #' @export
 #' @import Seurat
@@ -32,7 +33,7 @@
 #' # Example feature plot
 #' plot <- scVisFeaturePlot(
 #'   scRNA = seurat_obj,
-#'   feature = "CD3E",
+#'   features = "CD3E",
 #'   reduction = "umap",
 #'   pt.size = 0.5,
 #'   max.cutoff = 1.5,
@@ -42,50 +43,27 @@
 #' print(plot)
 #' }
 
-scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols =  c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"), title = NULL,ncol = NULL, nrow = NULL) {
+scVisFeaturePlot <- function(scRNA, features, reduction = "umap", pt.size = 0.0001, max.cutoff = 1.5, cols = c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"), title = NULL, ncol = NULL, nrow = NULL, ...) {
   # Ensure necessary libraries are loaded
   library(Seurat)
   library(ggplot2)
+  library(patchwork)
 
   # Set title to feature name if title is NULL
   if (is.null(title)) {
-    title <- feature
+    title <- features
   }
 
-  if (length(feature)>=2) {
-    plot <- lapply(feature, function(x){
-      FeaturePlot(
-        object = scRNA,
-        features = x,
-        reduction = reduction,
-        pt.size = pt.size,
-        max.cutoff = max.cutoff,
-        cols = cols
-      ) +
-        scale_x_continuous("") +
-        scale_y_continuous("") +
-        theme_bw() +
-        theme(
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          axis.ticks = element_blank(),
-          axis.text = element_blank(),
-          legend.position = "none",
-          plot.title = element_text(hjust = 0.5, size = 14)
-        ) +
-        ggtitle(x)
-    })
-
-    return(patchwork::wrap_plots(plot,ncol = ncol,nrow = nrow))
-  } else {
-    # Create the feature plot
-    plot <- FeaturePlot(
+  # Function to create a single feature plot
+  create_feature_plot <- function(feature) {
+    FeaturePlot(
       object = scRNA,
       features = feature,
       reduction = reduction,
       pt.size = pt.size,
       max.cutoff = max.cutoff,
-      cols = cols
+      cols = cols,
+      ...
     ) +
       scale_x_continuous("") +
       scale_y_continuous("") +
@@ -98,35 +76,18 @@ scVisFeaturePlot <- function(scRNA, feature, reduction = "umap", pt.size = 0.000
         legend.position = "none",
         plot.title = element_text(hjust = 0.5, size = 14)
       ) +
-      ggtitle(title)
-
-    return(plot)
+      ggtitle(feature)
   }
+
+  # Create plots for each feature
+  plots <- lapply(features, create_feature_plot)
+
+  # Combine plots using patchwork
+  combined_plot <- wrap_plots(plots, ncol = ncol, nrow = nrow)
+
+  return(combined_plot)
 }
 
-# Example usage
-# library(Seurat)
-# library(ggplot2)
-#
-# # Example Seurat object
-# seurat_obj <- CreateSeuratObject(counts = matrix(rnorm(1000), nrow = 100, ncol = 10))
-# seurat_obj <- NormalizeData(seurat_obj)
-# seurat_obj <- FindVariableFeatures(seurat_obj)
-# seurat_obj <- ScaleData(seurat_obj)
-# seurat_obj <- RunPCA(seurat_obj)
-# seurat_obj <- RunUMAP(seurat_obj, dims = 1:10)
-#
-# # Example feature plot
-# plot <- scVisFeaturePlot(
-#   scRNA = seurat_obj,
-#   feature = "PC_1",
-#   reduction = "umap",
-#   pt.size = 0.5,
-#   max.cutoff = 1.5,
-#   cols = c("blue", "red"),
-#   title = NULL
-# )
-# print(plot)
 
 # =============== 2.scVisFeaturePlot3  ===============
 #' @title Simultaneous Visualization of Three Features in a Single Plot

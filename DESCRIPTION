@@ -1,0 +1,42 @@
+Package: easySingleCell
+Title: This is an R package to fast the bioinformatics analysis for bulk-seq, scRNA-seq, stRNA-seq
+Version: 0.0.6
+Authors@R: 
+    person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: Fast your bioinformatics analysis for bulk-seq, scRNA-seq, stRNA-seq data based on easySingleCell!
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+LazyData: true
+Depends: 
+    R (>= 2.10)
+Imports:
+    tidyverse,
+    UCSCXenaTools,
+    IOBR,
+    clusterProfiler,
+    ggplot2,
+    ggpubr,
+    GSVA,
+    org.Hs.eg.db,
+    enrichplot,
+    scRNAtoolVis,
+    ClusterGVis,
+    qs,
+    ComplexHeatmap,
+    SummarizedExperiment
+biocViews: clusterProfiler,org.Hs.eg.db,SummarizedExperiment
+Collate: 
+    'Creat_Project.R'
+    'Internal.R'
+    'TCGA_panel.R'
+    'Useful_function.R'
+    'color_panel.R'
+    'generics.R'
+    'import.R'
+    'plot_panel.R'
+    'prepare_panel.R'
+    'process_panel.R'
+    'scVisual_panel.R'

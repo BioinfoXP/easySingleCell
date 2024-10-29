@@ -40,7 +40,7 @@ creat_project <- function(ProjectName) {
   )
 
   # Write the R project file
-  writeLines(rproj_content, con = file.path(ProjectName, paste0(ProjectName, ".Rproj")))
+  writeLines(rproj_content, con = file.path(ProjectName, paste0(basename(ProjectName), ".Rproj")))
 
   message("Project '", ProjectName, "' created successfully with the necessary subdirectories and R project file.")
 }

@@ -1,293 +1,138 @@
 # Load necessary libraries
+library(DT)
 library(tidyverse)
-library(UCSCXenaTools)
-library(IOBR)
+library(data.table)
 
-# Define cancer types
-cancer_types <- c('PANCAN', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL',
-                  'COAD', 'DLBC', 'ESCA', 'GBM', 'KIRP', 'LAML',
-                  'HNSC', 'KICH', 'KIRC', 'LGG', 'LIHC',
-                  'LUAD', 'LUSC', 'MESO', 'OV', 'PAAD',
-                  'PCPG', 'PRAD', 'READ', 'SARC', 'SKCM',
-                  'STAD', 'TGCT', 'THCA', 'THYM', 'UCEC', 'UVM')
-
-# ======================== 1. Index object============================
-setClass('Index',
-         slots = list(save_path = "character",
-                      data_type = "character",
-                      cancer_type = "character"),
-         prototype = list(save_path = 'output_xena',
-                          data_type = 'counts',
-                          cancer_type = 'NULL'))
-
-# Validity check for Index class
-setValidity("Index", function(object) {
-  if (object@save_path == 'NULL') {
-    warning("No path provided, it will create an 'output_xena' folder!", call. = FALSE)
-  } else if (!dir.exists(object@save_path)) {
-    cli::cli_abort(message = {
-      cli::col_red("Error: Invalid path!")
-    })
+# ========================= 1. Define process function============================
+# ======== 定义下载函数
+download_data <- function(file_link, output_dir, overwrite = FALSE) {
+  path <- file.path(output_dir, basename(file_link))
+  if (!file.exists(path) || overwrite) {
+    download.file(url = file_link, destfile = path)
+    message("Downloaded: ", path)
   } else {
-    message('Your save path: ', object@save_path)
+    message("File already exists and will not be overwritten: ", path)
   }
-
-  if (object@cancer_type  == 'NULL') {
-    cli::cli_abort(message = {
-      cli::col_red("Error: Please provide valid cancer type!")
-    })
-  } else if (!object@cancer_type %in% cancer_types) {
-    cli::cli_abort(message = {
-      cli::col_red("Error: Please provide valid cancer type!")
-    })
-  } else {
-    message('We will download: ', object@cancer_type)
-  }
-})
-
-# ======================== 2. PanCancer & TCGA object============================
-setClass('PanCancer', contains = 'Index',
-         slots = list(target_info = "character"),
-         prototype = list(target_info = "tcga_target_no_normal_RSEM_hugo_norm_count",
-                          cancer_type = 'PANCAN',
-                          save_path = 'output_xena',
-                          data_type = 'counts'))
-
-setClass('TCGA', contains = 'Index',
-         slots = list(target_info = "character"),
-         prototype = list(target_info = 'NULL',
-                          cancer_type = 'NULL',
-                          save_path = 'output_xena',
-                          data_type = 'counts'))
-
-# ========================= 3. XenaTools_xp Interface============================
-setGeneric("XenaTools_xp", function(object, ...) {
-  standardGeneric("XenaTools_xp")
-})
-
-# ========================= 4. Methods============================
-# ========================= PanCancer =========================
-setMethod("XenaTools_xp", "PanCancer", function(object, ...) {
-  {
-    library(tidyverse)
-    library(UCSCXenaTools)
-    options(timeout = 10000)
-    Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 10)
-    dir.create(object@save_path, showWarnings = FALSE)
-  }
-
-  {
-    filterDataset1 <- 'TCGA_TARGET_phenotype'
-    filterDataset2 <- 'TCGA_survival_data_2.txt'
-  }
-
-  # Retrieve data
-  message("=> Starting query!\n")
-  project_data <- XenaScan() %>%
-    XenaGenerate()
-  message("=> Starting download!\n")
-  exp <- project_data %>%
-    XenaFilter(filterDatasets = object@target_info) %>%
-    XenaQuery() %>%
-    XenaDownload() %>%
-    XenaPrepare()
-
-  # Download clinical data
-  cli <- project_data %>%
-    XenaFilter(filterDatasets = filterDataset1) %>%
-    XenaQuery() %>%
-    XenaDownload() %>%
-    XenaPrepare()
-
-  # Download survival data
-  surv <- project_data %>%
-    XenaFilter(filterDatasets = filterDataset2) %>%
-    XenaQuery() %>%
-    XenaDownload() %>%
-    XenaPrepare()
-
-  # Save data
-  save(exp, cli, surv, file = paste0(object@save_path, '/', object@data_type, "_xena_", object@cancer_type, ".Rdata"))
-  message("=> Success! Data saved.")
-
-  # Clean
-  message("=> Start! Data clean.")
-  coding_gene <- system.file("data", "protein_coding.Rdata", package = "easySingleCell")
-  load(coding_gene)
-
-  coding_gene <- coding_gene %>%
-    filter(gene_type == "protein_coding") %>%
-    distinct(gene_name, .keep_all = TRUE)
-
-  # Common genes
-  com_gene <- intersect(exp$Ensembl_ID, coding_gene$gene_id)
-
-  # Filter (keep only coding genes)
-  coding_gene <- coding_gene[coding_gene$gene_id %in% com_gene, ]
-  exp <- exp[exp$Ensembl_ID %in% com_gene, ]
-
-  exp <- exp %>% tibble::column_to_rownames(var = "Ensembl_ID")
-  exp <- exp[coding_gene$gene_id, ]
-  identical(row.names(exp), coding_gene$gene_id)  # TRUE
-  row.names(exp) <- NULL
-  row.names(exp) <- coding_gene$gene_name
-
-  # Extract coding genes from expression matrix
-  com_gene <- intersect(colnames(exp), cli$submitter_id.samples)
-  com_gene <- intersect(com_gene, surv$sample)
-
-  exp <- exp[, com_gene]
-  exp <- 2^exp - 1
-  cli <- cli[match(com_gene, cli$submitter_id.samples), ]
-  surv <- surv[match(com_gene, surv$sample), ]
-
-  # Save cleaned data
-  identical(colnames(exp), surv$sample)  # TRUE
-  identical(colnames(exp), cli$submitter_id.samples)  # TRUE
-
-  # Save data
-  save(exp, cli, surv, file = paste0(object@save_path, '/', object@data_type, "_xena_clean_", object@cancer_type, ".Rdata"))
-  message("=> Success! Data saved.")
-})
-
-# =====================TCGA=====================
-setMethod("XenaTools_xp", "TCGA", function(object, ...) {
-  {
-    library(tidyverse)
-    library(UCSCXenaTools)
-    options(timeout = 10000)
-    Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 10)
-    dir.create(object@save_path, showWarnings = FALSE)
-  }
-
-  # Retrieve data
-  message("=> Starting query!\n")
-  project <- object@cancer_type
-  project_data <- XenaScan(pattern = project)
-  # Only GDC
-  cohort <- str_extract(project_data$XenaCohorts, pattern = "^GDC.*") %>%
-    na.omit() %>% unique()
-
-  # Download expression matrix
-  dataset <- project_data %>%
-    XenaGenerate(subset = XenaCohorts == cohort & DataSubtype == "gene expression RNAseq")
-
-  message("=> Starting download!\n")
-  exp <- dataset %>%
-    XenaFilter(filterDatasets = dataset@datasets[str_detect(dataset@datasets, object@data_type)]) %>% # Filter datasets
-    XenaQuery() %>% # Query
-    XenaDownload() %>% # Download
-    XenaPrepare() # Prepare
-
-  # Download clinical data
-  # Retrieve
-  sur_pheno <- project_data %>% XenaGenerate(subset = XenaCohorts == cohort & DataSubtype == "phenotype")
-
-  dataset2 <- sur_pheno@datasets # Index
-
-  filterDataset1 <- dataset2[1]
-  filterDataset2 <- dataset2[2]
-
-  # Download survival and cli data
-  data1 <- sur_pheno %>%
-    XenaFilter(filterDatasets = filterDataset1) %>% # Filter datasets
-    XenaQuery() %>% # Query
-    XenaDownload() %>% # Download
-    XenaPrepare() # Prepare
-
-  data2 <- sur_pheno %>%
-    XenaFilter(filterDatasets = filterDataset2) %>% # Filter datasets
-    XenaQuery() %>% # Query
-    XenaDownload() %>% # Download
-    XenaPrepare() # Prepare
-
-  # results judge
-  # if cols > 4 is cli，else if surv
-  cols <- c(ncol(data1), ncol(data2))
-  result <- ifelse(cols > 4, "cli", "surv")
-  assign(result[1], data1)
-  assign(result[2], data2)
-
-  # Save data
-  save(exp, cli, surv, file = paste0(object@save_path, '/', object@data_type, "_xena_", object@cancer_type, ".Rdata"))
-  message("=> Success! Data saved.")
-
-  # Clean
-  message("=> Start! Data clean.")
-  coding_gene <- system.file("data", "protein_coding.Rdata", package = "OneGene")
-  load(coding_gene)
-
-  coding_gene <- coding_gene %>%
-    filter(gene_type == "protein_coding") %>%
-    distinct(gene_name, .keep_all = TRUE)
-
-  # Common genes
-  com_gene <- intersect(exp$Ensembl_ID, coding_gene$gene_id)
-
-  # Filter (keep only coding genes)
-  coding_gene <- coding_gene[coding_gene$gene_id %in% com_gene, ]
-  exp <- exp[exp$Ensembl_ID %in% com_gene, ]
-
-  exp <- exp %>% tibble::column_to_rownames(var = "Ensembl_ID")
-  exp <- exp[coding_gene$gene_id, ]
-  identical(row.names(exp), coding_gene$gene_id)  # TRUE
-  row.names(exp) <- NULL
-  row.names(exp) <- coding_gene$gene_name
-
-  # Extract coding genes from expression matrix
-  com_gene <- intersect(colnames(exp), cli$submitter_id.samples)
-  com_gene <- intersect(com_gene, surv$sample)
-
-  exp <- exp[, com_gene]
-  exp <- 2^exp - 1
-  cli <- cli[match(com_gene, cli$submitter_id.samples), ]
-  surv <- surv[match(com_gene, surv$sample), ]
-
-  # Save cleaned data
-  identical(colnames(exp), surv$sample)  # TRUE
-  identical(colnames(exp), cli$submitter_id.samples)  # TRUE
-
-  # TPM conversion and log transformation
-  library(IOBR)
-  tpm_data <- count2tpm(exp, idType = 'Symbol')
-  tpm_data <- log2(tpm_data + 1)
-
-  # Save data
-  save(tpm_data, exp, cli, surv, file = paste0(object@save_path, '/', object@data_type, "_xena_clean_", object@cancer_type, ".Rdata"))
-  message("=> Success! Data saved.")
-})
-
-# =====================5. get_TCGA ==============
-#' Create an Object for TCGA or PanCancer Project then download and clean the data
-#'
-#' This function creates an object for either the TCGA or PanCancer project.
-#'
-#' @param project_type The type of project ('TCGA' or 'PanCancer').
-#' @param cancer_type The type of cancer to study.
-#' @return An object of class 'TCGA' or 'PanCancer'.
-#' @export
-#' @examples
-#'     get_TCGA(cancer_type = 'COAD', project_type = 'TCGA')
-get_TCGA <- function(cancer_type = 'NULL',
-                     project_type = 'TCGA') {
-  save_path = 'output_xena'
-  dir.create(save_path, showWarnings = FALSE)
-
-
-  # Create the object
-  obj <- if (!project_type %in% c('TCGA', 'PanCancer')) {
-    cli::cli_abort(message = {
-      cli::col_red("Error: Please provide valid project type!\n\t'TCGA' or 'PanCancer'!")
-    })
-  } else if (project_type == 'PanCancer') {
-    new(Class = 'PanCancer', save_path = save_path)
-  } else {
-    new(Class = project_type, cancer_type = cancer_type, save_path = save_path)
-  }
-
-  # Run the XenaTools_xp function
-  XenaTools_xp(obj)
 }
+
+# ======== 定义处理表达数据的函数
+process_expression_data <- function(exp_data, coding_genes) {
+  # 过滤和去重 protein_coding 数据
+  coding_gene <- coding_genes %>%
+    filter(gene_type == "protein_coding") %>%
+    distinct(gene_name, .keep_all = TRUE)
+
+  # 获取共同的基因
+  com_gene <- intersect(exp_data$Ensembl_ID, coding_gene$gene_id)
+  exp_data <- exp_data[exp_data$Ensembl_ID %in% com_gene, ]
+  row.names(exp_data) <- NULL
+  exp_data <- exp_data %>% tibble::column_to_rownames(var = "Ensembl_ID")
+  exp_data <- exp_data[coding_gene$gene_id, ]
+
+  if (identical(row.names(exp_data), coding_gene$gene_id)) {
+    row.names(exp_data) <- coding_gene$gene_name
+  } else {
+    stop("Row names do not match gene IDs in coding_gene.")
+  }
+
+  return(exp_data)
+}
+
+# =====================2. get_TCGA ==============
+#' Get TCGA Data for a Specific Cancer Type
+#'
+#' This function downloads and processes TCGA (The Cancer Genome Atlas) data for a given cancer type.
+#' It retrieves expression, clinical, and survival data, processes the expression data to include only
+#' protein-coding genes, and saves the processed data to an Rdata file.
+#'
+#' @param cancer_type A character string representing the cancer type abbreviation (e.g., "BRCA" for breast cancer).
+#' @param overwrite A logical value indicating whether to overwrite existing files during the download process. Default is FALSE.
+#'
+#' @return A list containing the following elements:
+#' \describe{
+#'   \item{exp_tpm}{The raw expression data in TPM format.}
+#'   \item{exp_tpm_coding_only}{The processed expression data, including only protein-coding genes (TPM).}
+#'   \item{exp_counts}{The raw expression data in counts format.}
+#'   \item{exp_counts_coding_only}{The processed expression data, including only protein-coding genes (counts).}
+#'   \item{clinical}{The clinical data for the cancer type.}
+#'   \item{survival}{The survival data for the cancer type.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#'   # Example usage:
+#'   result <- get_TCGA("BRCA", overwrite = TRUE)
+#' }
+#'
+#' @export
+get_TCGA <- function(cancer_type, overwrite = FALSE) {
+  # 检查 cancer_type 是否在 tcga.table 中
+  index <- which(tcga.table$Abbreviation == cancer_type)
+  if (length(index) == 0) {
+    message(paste("Cancer type", cancer_type, "not found in tcga.table. Please select a valid cancer type from the table below:"))
+    datatable(tcga.table[c(1, 2)])
+    return(NULL)
+  }
+  names(index) <- cancer_type
+
+  load(system.file("data", "protein_coding.Rdata", package = "TCGA_Table.Rdata"))
+  load(system.file("data", "protein_coding.Rdata", package = "protein_coding.Rdata"))
+
+  # 提取 URL 信息
+  url <- tcga.table[index, , drop = TRUE]
+
+  # 创建输出目录
+  output_dir <- paste0('./output_xena/', names(index))
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
+  # 定义要下载的文件类型
+  file_types <- c("star_tpm.Link", "clinical.Link", "survival.Link", "star_counts.Link")
+
+  # 循环下载每种文件类型
+  message("Downloading files...")
+  for (file_type in file_types) {
+    download_data(url[[file_type]], output_dir, overwrite = overwrite)
+  }
+
+  # 获取下载的文件列表
+  files <- list.files(path = paste0('./output_xena/', cancer_type), full.names = TRUE)
+
+  # 读取表达数据文件
+  message("Reading expression data files...")
+  exp.tpm <- fread(files[grep('star_tpm', files)], data.table = FALSE)
+  exp.counts <- fread(files[grep('star_counts', files)], data.table = FALSE)
+
+  # 使用函数处理表达数据
+  message("Processing expression data...")
+  exp.tpm.CodingOnly <- process_expression_data(exp.tpm, protein_coding)
+  exp.counts.CodingOnly <- process_expression_data(exp.counts, protein_coding)
+
+  # 读取临床和生存数据文件
+  message("Reading clinical and survival data files...")
+  cli <- fread(files[grep('clinical', files)], data.table = FALSE)
+  surv <- fread(files[grep('survival', files)], data.table = FALSE)
+
+  # 匹配临床和生存数据
+  message("Matching clinical and survival data...")
+  cli <- cli[match(colnames(exp.tpm.CodingOnly), cli$sample), ];row.names(cli)=NULL
+  surv <- surv[match(colnames(exp.tpm.CodingOnly), surv$sample), ];row.names(surv)=NULL
+
+  # 保存处理后的数据为 Rdata 文件
+  output_file <- file.path(output_dir, paste0(cancer_type, "_processed.Rdata"))
+  save(exp.tpm.CodingOnly, exp.counts.CodingOnly, cli, surv, file = output_file)
+  message("Processed data saved to: ", output_file)
+
+  # 返回结果
+  list(
+    exp_tpm = exp.tpm,
+    exp_tpm_coding_only = exp.tpm.CodingOnly,
+    exp_counts = exp.counts,
+    exp_counts_coding_only = exp.counts.CodingOnly,
+    clinical = cli,
+    survival = surv
+  )
+}
+
 
 
 
@@ -302,7 +147,7 @@ get_TCGA <- function(cancer_type = 'NULL',
 #' group <- TCGA_group(expr)
 #' }
 
-# ======== 6. TCGA Group =============
+# ======== 3. TCGA Group =============
 TCGA_group <- function(expr) {
   group <- sapply(strsplit(colnames(expr), "\\-"), "[", 4)
   group <- sapply(strsplit(group, ""), "[", 1)
@@ -312,7 +157,7 @@ TCGA_group <- function(expr) {
 }
 
 
-# ======== 7. TCGA DEG limma=============
+# ======== 4. TCGA DEG limma=============
 #' @title Differential Expression Analysis
 #' @description This function performs differential expression analysis using limma.
 #' @param expr.tpm A matrix or data frame containing TPM expression data with genes as rows and samples as columns.
@@ -373,7 +218,7 @@ TCGADegLimma <- function(expr.tpm, group = NULL, contrast1 = 'tumor', contrast2 
 # results <- differential_expression_analysis(expr, group, output_dir = "./results")
 
 
-# ============== 8. TCGA tumor extract =================
+# ============== 5. TCGA tumor extract =================
 #' @title Data Preprocessing for Tumor Samples
 #' @description This function preprocesses the expression, survival, and clinical data for tumor samples.
 #' @param expr A matrix or data frame containing TPM expression data with genes as rows and samples as columns.
@@ -429,7 +274,7 @@ TCGAExtractTumor <- function(expr, surv, cli, output_file = "./output_data/TCGAE
 # cli <- read.csv('./path_to_your_clinical_data.csv')
 # preprocessed_data <- preprocess_tumor_data(expr, surv, cli, output_file = "./output_data/preprocessed_data.RData")
 
-# ============== 9. Unicox Regression =================
+# ============== 6. Unicox Regression =================
 
 # bioForest.R
 
@@ -573,7 +418,7 @@ TCGAUniCox <- function(genes, expr.tpm, surv, cli, width = 8, height = 6,output_
 # genes <- c("gene1", "gene2", "gene3")
 # results <- TCGAUniCox(genes, expr.tpm = expr, surv = surv, cli = cli, output_dir = "./output_data")
 
-# ============== 10. TNM Stage =================
+# ============== 7. TNM Stage =================
 
 #' @title Plot Gene Expression by Pathologic Stages
 #' @description This function plots gene expression levels by pathologic stages (T, N, M) using boxplots.
@@ -689,7 +534,7 @@ TCGAStagePlot <- function(genes, exp, cli,
   dev.off()
 }
 
-# ============== 11. TCGA survival =================
+# ============== 8. TCGA survival =================
 #' @title Perform Survival Analysis and Plot Survival Curves
 #' @description This function performs survival analysis for a list of genes and plots the survival curves.
 #' @param rt A data frame containing survival data and gene expression data. The first two columns should be 'futime' and 'fustat'.

@@ -2,21 +2,35 @@
 % Please edit documentation in R/TCGA_panel.R
 \name{get_TCGA}
 \alias{get_TCGA}
-\title{Create an Object for TCGA or PanCancer Project then download and clean the data}
+\title{Get TCGA Data for a Specific Cancer Type}
 \usage{
-get_TCGA(cancer_type = "NULL", project_type = "TCGA")
+get_TCGA(cancer_type, overwrite = FALSE)
 }
 \arguments{
-\item{cancer_type}{The type of cancer to study.}
+\item{cancer_type}{A character string representing the cancer type abbreviation (e.g., "BRCA" for breast cancer).}
 
-\item{project_type}{The type of project ('TCGA' or 'PanCancer').}
+\item{overwrite}{A logical value indicating whether to overwrite existing files during the download process. Default is FALSE.}
 }
 \value{
-An object of class 'TCGA' or 'PanCancer'.
+A list containing the following elements:
+\describe{
+\item{exp_tpm}{The raw expression data in TPM format.}
+\item{exp_tpm_coding_only}{The processed expression data, including only protein-coding genes (TPM).}
+\item{exp_counts}{The raw expression data in counts format.}
+\item{exp_counts_coding_only}{The processed expression data, including only protein-coding genes (counts).}
+\item{clinical}{The clinical data for the cancer type.}
+\item{survival}{The survival data for the cancer type.}
+}
 }
 \description{
-This function creates an object for either the TCGA or PanCancer project.
+This function downloads and processes TCGA (The Cancer Genome Atlas) data for a given cancer type.
+It retrieves expression, clinical, and survival data, processes the expression data to include only
+protein-coding genes, and saves the processed data to an Rdata file.
 }
 \examples{
-    get_TCGA(cancer_type = 'COAD', project_type = 'TCGA')
+\dontrun{
+  # Example usage:
+  result <- get_TCGA("BRCA", overwrite = TRUE)
+}
+
 }

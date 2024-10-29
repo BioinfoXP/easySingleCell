@@ -1,6 +1,6 @@
 Package: easySingleCell
 Title: This is an R package to fast the bioinformatics analysis for bulk-seq, scRNA-seq, stRNA-seq
-Version: 0.0.5
+Version: 0.0.6
 Authors@R: 
     person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
@@ -32,6 +32,7 @@ Collate:
     'Creat_Project.R'
     'Internal.R'
     'TCGA_panel.R'
+    'Useful_function.R'
     'color_panel.R'
     'generics.R'
     'import.R'

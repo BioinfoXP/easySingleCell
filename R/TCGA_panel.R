@@ -66,6 +66,10 @@ process_expression_data <- function(exp_data, coding_genes) {
 #'
 #' @export
 get_TCGA <- function(cancer_type, overwrite = FALSE) {
+
+  load(system.file("data", "protein_coding.Rdata", package = "easySingleCell"))
+  load(system.file("data", "TCGA_Table.Rdata", package = "easySingleCell"))
+
   # 检查 cancer_type 是否在 tcga.table 中
   index <- which(tcga.table$Abbreviation == cancer_type)
   if (length(index) == 0) {
@@ -74,9 +78,6 @@ get_TCGA <- function(cancer_type, overwrite = FALSE) {
     return(NULL)
   }
   names(index) <- cancer_type
-
-  load(system.file("data", "protein_coding.Rdata", package = "TCGA_Table.Rdata"))
-  load(system.file("data", "protein_coding.Rdata", package = "protein_coding.Rdata"))
 
   # 提取 URL 信息
   url <- tcga.table[index, , drop = TRUE]

@@ -1,5 +1,5 @@
 # Load necessary libraries
-library(DT)
+library(knitr)
 library(tidyverse)
 library(data.table)
 
@@ -74,8 +74,8 @@ get_TCGA <- function(cancer_type, overwrite = FALSE) {
   index <- which(tcga.table$Abbreviation == cancer_type)
   if (length(index) == 0) {
     message(paste("Cancer type", cancer_type, "not found in tcga.table. Please select a valid cancer type from the table below:"))
-    datatable(tcga.table[c(1, 2)])
-    return(NULL)
+    knitr::kable(tcga.table[c(1, 2)])
+    return(tcga.table)
   }
   names(index) <- cancer_type
 
@@ -120,11 +120,9 @@ get_TCGA <- function(cancer_type, overwrite = FALSE) {
 
   # 保存处理后的数据为 Rdata 文件
   output_file <- file.path(output_dir, paste0(cancer_type, "_processed.Rdata"))
-  save(exp.tpm.CodingOnly, exp.counts.CodingOnly, cli, surv, file = output_file)
-  message("Processed data saved to: ", output_file)
 
   # 返回结果
-  list(
+  eset = list(
     exp_tpm = exp.tpm,
     exp_tpm_coding_only = exp.tpm.CodingOnly,
     exp_counts = exp.counts,
@@ -132,6 +130,11 @@ get_TCGA <- function(cancer_type, overwrite = FALSE) {
     clinical = cli,
     survival = surv
   )
+
+  save(eset, file = output_file)
+  message("Processed data saved to: ", output_file)
+
+  return(eset)
 }
 
 

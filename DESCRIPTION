@@ -8,20 +8,17 @@ Description: Fast your bioinformatics analysis for bulk-seq, scRNA-seq, stRNA-se
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.3
 LazyData: true
 Depends: 
-    R (>= 2.10)
+    R (>= 4.1.1)
 Imports:
     tidyverse,
     UCSCXenaTools,
     IOBR,
-    clusterProfiler,
-    ggplot2,
     ggpubr,
     GSVA,
     org.Hs.eg.db,
-    enrichplot,
     scRNAtoolVis,
     ClusterGVis,
     qs,

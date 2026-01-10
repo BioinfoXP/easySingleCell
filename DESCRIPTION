@@ -16,7 +16,7 @@ Depends:
     R (>= 4.2.0)
 Imports: 
     dplyr,
-    ggplot2,
+    ggplot2 (>= 3.5.0),
     Seurat (>= 4.0.0),
     magrittr,
     tibble,

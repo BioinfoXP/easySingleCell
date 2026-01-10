@@ -14,6 +14,7 @@ scVisDimPlot(
   stroke = 0,
   alpha = 1,
   show.arrow = TRUE,
+  show.axis.title = FALSE,
   strip.color = "#e6bac5",
   legend.position = "right",
   aspect.ratio = 1,
@@ -38,6 +39,8 @@ scVisDimPlot(
 \item{alpha}{Point transparency. Default is 1.}
 
 \item{show.arrow}{Logical, whether to show arrows on axes. Default TRUE.}
+
+\item{show.axis.title}{Logical, whether to show axis titles (e.g. UMAP_1). Default FALSE.}
 
 \item{strip.color}{Background color for facet strips. Default "#e6bac5".}
 

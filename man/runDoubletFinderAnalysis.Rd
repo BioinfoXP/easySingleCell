@@ -2,39 +2,28 @@
 % Please edit documentation in R/2.scRNA-basic.R
 \name{runDoubletFinderAnalysis}
 \alias{runDoubletFinderAnalysis}
-\title{Run DoubletFinder Analysis}
+\title{Run DoubletFinder Analysis (Pure Multi-threaded)}
 \usage{
 runDoubletFinderAnalysis(
   sce,
   split_by = "orig.ident",
   pcs = 1:15,
   ncores = 4,
-  double_rate_mode = "auto",
   sct = FALSE
 )
 }
 \arguments{
-\item{sce}{A Seurat object.}
+\item{sce}{Seurat object.}
 
-\item{split_by}{Metadata column to split samples by. Default is "orig.ident".}
+\item{split_by}{Metadata column to split samples (e.g. "orig.ident").}
 
-\item{pcs}{Numeric vector of PCs to use. Default is 1:15.}
+\item{pcs}{PCs to use (default 1:15).}
 
-\item{ncores}{Number of cores for parallel processing (paramSweep). Default is 4.}
+\item{ncores}{Number of cores for paramSweep.}
 
-\item{double_rate_mode}{Strategy for doublet rate:
-\itemize{
-\item "auto": Estimates rate based on cell count (linear fit to 10x Genomics standards: ~0.8\% per 1000 cells).
-\item Numeric value (e.g., 0.05): Applies a fixed rate to all samples.
-}}
-
-\item{sct}{Logical, whether sctransform was used. Default is FALSE.}
-}
-\value{
-A Seurat object with 'Doublet_Score' and 'Doublet_Class' added to metadata.
+\item{sct}{Logical, whether to use SCTransform.}
 }
 \description{
-Automatically detects doublets in scRNA-seq data. It splits the object by sample,
-calculates the optimal pK for each sample, predicts doublets, standardizes the metadata column names,
-and merges the object back together.
+A streamlined, multi-threaded implementation for Seurat V4/V5.
+No fallback logic. If cores fail, it fails.
 }

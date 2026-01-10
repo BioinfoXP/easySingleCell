@@ -94,7 +94,6 @@ scVisFeaturePlot <- function(scRNA,
   return(combined_plot)
 }
 
-
 # =============== DimPlot  ================
 # =============== 2.scVisDimPlot  ================
 #' @title Cloud/Misty Style DimPlot (Zemin Zhang Style)
@@ -110,6 +109,7 @@ scVisFeaturePlot <- function(scRNA,
 #' @param stroke Point stroke thickness. Default is 0 (crucial for the "misty" look).
 #' @param alpha Point transparency. Default is 1.
 #' @param show.arrow Logical, whether to show arrows on axes. Default TRUE.
+#' @param show.axis.title Logical, whether to show axis titles (e.g. UMAP_1). Default FALSE.
 #' @param strip.color Background color for facet strips. Default "#e6bac5".
 #' @param legend.position Position of legend ("right", "bottom", "none", etc.). Default "right".
 #' @param ... Additional arguments passed to ggplot2 theme.
@@ -128,6 +128,7 @@ scVisDimPlot <- function(scRNA,
                          stroke = 0,
                          alpha = 1,
                          show.arrow = TRUE,
+                         show.axis.title = FALSE, # 新增参数：控制轴标题显示
                          strip.color = "#e6bac5",
                          legend.position = "right",
                          aspect.ratio = 1,
@@ -174,21 +175,27 @@ scVisDimPlot <- function(scRNA,
   }
 
   # 4. 构建 ggplot 基础图层
-  # 注意：核心在于 shape=16, stroke=0
   p <- ggplot2::ggplot(plot_data, ggplot2::aes_string(x = dims[1], y = dims[2], color = group_col)) +
     ggplot2::geom_point(size = pt.size, shape = 16, stroke = stroke, alpha = alpha) +
     ggplot2::scale_color_manual(values = colors) +
     ggplot2::theme_classic() +
-    ggplot2::labs(x = dims[1], y = dims[2])
+    ggplot2::labs(x = dims[1], y = dims[2]) # 这里已经设置了标题内容
 
   # 5. 应用“张泽民团队”风格主题
 
-  # 定义坐标轴样式 (带箭头)
+  # 定义坐标轴线条样式 (带箭头)
   axis_line_setting <- if (show.arrow) {
     ggplot2::element_line(colour = "black", size = 0.3,
                           arrow = ggplot2::arrow(length = ggplot2::unit(0.1, "cm"), type = "closed"))
   } else {
     ggplot2::element_line(colour = "black", size = 0.3)
+  }
+
+  # 定义坐标轴标题样式 (新增逻辑)
+  axis_title_setting <- if (show.axis.title) {
+    ggplot2::element_text(size = 10, face = "plain", color = "black") # 如果True，显示文字
+  } else {
+    ggplot2::element_blank() # 如果False，隐藏文字
   }
 
   p <- p + ggplot2::theme(
@@ -197,7 +204,7 @@ scVisDimPlot <- function(scRNA,
     panel.grid.minor = ggplot2::element_blank(),
 
     # 坐标轴设置
-    axis.title = ggplot2::element_blank(), # 原文通常不显示 Label，只显示箭头
+    axis.title = axis_title_setting,   # 应用刚才定义的标题样式
     axis.text = ggplot2::element_blank(),
     axis.ticks = ggplot2::element_blank(),
     axis.line = axis_line_setting,
@@ -217,8 +224,158 @@ scVisDimPlot <- function(scRNA,
     p <- p + ggplot2::facet_wrap(as.formula(paste("~", split.by)))
   }
 
-  # 7. 优化图例点的显示 (防止图例点太小看不清)
+  # 7. 优化图例点的显示
   p <- p + ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 3, alpha = 1)))
+
+  return(p)
+}
+
+
+
+# =============== CellRatioPlot  ================
+# =============== 3.scVisCellRatioPlot  ================
+#' @title Visualize Cell Type Proportion Differences
+#' @description Calculates cell type proportions per sample and performs statistical comparisons between groups.
+#' This function includes robust handling for missing cell types (filling with 0) to ensure accurate statistical testing.
+#' It combines boxplots (distribution) with jitter points (individual samples) and adds statistical significance annotations using `ggpubr`.
+#'
+#' @param sce A Seurat object.
+#' @param group.by Column name in meta.data distinguishing the conditions/groups (e.g., "Treatment", "Control").
+#' @param cell.type Column name in meta.data representing cell types/clusters (e.g., "celltype", "seurat_clusters"). Default is "celltype".
+#' @param sample.by Column name in meta.data representing biological replicates/samples (e.g., "orig.ident"). Default is "orig.ident".
+#' @param comparisons A list of vectors specifying the pairs to compare (e.g., list(c("Ctrl", "Treat"))). If NULL, performs global test or pairwise against ref depending on context.
+#' @param test.method Method for statistical test. Default "wilcox.test". Options: "t.test", "kruskal.test", "anova".
+#' @param label.type What to show for significance. Default "p.signif" (*, **, ns). Option: "p.format" (numeric value).
+#' @param cols Vector of colors for groups. If NULL, uses a default palette.
+#' @param pt.size Size of the jitter points representing samples. Default 1.5.
+#' @param width Bar/Box width. Default 0.6.
+#' @param ... Additional arguments passed to ggplot2 theme.
+#'
+#' @return A ggplot object with statistical annotations.
+#' @export
+#'
+#' @importFrom Seurat FetchData
+#' @importFrom dplyr group_by summarise mutate ungroup select count n
+#' @importFrom tidyr complete
+#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter theme_classic scale_fill_manual scale_color_manual scale_y_continuous labs element_text element_line position_dodge position_jitterdodge
+#' @importFrom ggpubr stat_compare_means
+#' @importFrom scales percent hue_pal
+#' @importFrom stats na.omit
+#'
+#' @examples
+#' \dontrun{
+#'   # 1. Basic usage: Two-group comparison (default Wilcoxon test)
+#'   # Automatically compares groups found in "treatment" column
+#'   scVisCellRatioPlot(sce,
+#'                      group.by = "treatment",
+#'                      cell.type = "cell_type",
+#'                      sample.by = "orig.ident")
+#'
+#'   # 2. Multi-group comparison with specific pairs
+#'   # Useful if you have 3 groups (A, B, C) and only want to compare A vs B and A vs C
+#'   my_comparisons <- list(c("A", "B"), c("A", "C"))
+#'
+#'   scVisCellRatioPlot(sce,
+#'                      group.by = "group",
+#'                      cell.type = "cell_type",
+#'                      sample.by = "orig.ident",
+#'                      comparisons = my_comparisons,
+#'                      test.method = "wilcox.test",
+#'                      label.type = "p.signif") # Display stars (*, **, ***)
+#'
+#'   # 3. Show numeric P-values instead of stars
+#'   scVisCellRatioPlot(sce,
+#'                      group.by = "treatment",
+#'                      cell.type = "cell_type",
+#'                      sample.by = "orig.ident",
+#'                      label.type = "p.format") # Display value (e.g., 0.0042)
+#' }
+scVisCellRatioPlot <- function(sce,
+                               group.by,
+                               cell.type = "celltype",
+                               sample.by = "orig.ident",
+                               comparisons = NULL,
+                               test.method = "wilcox.test",
+                               label.type = "p.signif",
+                               cols = NULL,
+                               pt.size = 1.5,
+                               width = 0.6,
+                               ...) {
+
+  # 1. Check input columns
+  if (!all(c(group.by, cell.type, sample.by) %in% colnames(sce@meta.data))) {
+    stop("One or more specified columns not found in meta.data.")
+  }
+
+  # 2. Calculate proportions
+  message("Calculating cell proportions per sample...")
+
+  meta_df <- Seurat::FetchData(sce, vars = c(group.by, cell.type, sample.by))
+  colnames(meta_df) <- c("Group", "CellType", "Sample")
+
+  ratio_data <- meta_df %>%
+    dplyr::group_by(Sample, Group, CellType) %>%
+    dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
+    # Critical step: fill missing combinations with 0 to avoid statistical bias
+    tidyr::complete(Sample, CellType, fill = list(n = 0)) %>%
+    # Re-fill Group info which becomes NA after complete()
+    dplyr::group_by(Sample) %>%
+    dplyr::mutate(Group = unique(stats::na.omit(Group))) %>%
+    dplyr::ungroup() %>%
+    # Calculate ratio
+    dplyr::group_by(Sample) %>%
+    dplyr::mutate(Ratio = n / sum(n)) %>%
+    dplyr::ungroup()
+
+  # 3. Set colors
+  if (is.null(cols)) {
+    n_groups <- length(unique(ratio_data$Group))
+    if (n_groups <= 10) {
+      cols <- c("#E64B35FF", "#4DBBD5FF", "#00A087FF", "#3C5488FF",
+                "#F39B7FFF", "#8491B4FF", "#91D1C2FF", "#DC0000FF", "#7E6148FF", "#B09C85FF")
+    } else {
+      cols <- scales::hue_pal()(n_groups)
+    }
+  }
+
+  # 4. Auto-generate comparisons if needed
+  groups <- unique(ratio_data$Group)
+  if (is.null(comparisons) && length(groups) == 2) {
+    comparisons <- list(c(groups[1], groups[2]))
+  }
+
+  # 5. Plotting
+  p <- ggplot2::ggplot(ratio_data, ggplot2::aes(x = CellType, y = Ratio, fill = Group)) +
+    ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.8, width = width, position = ggplot2::position_dodge(width = 0.8)) +
+    ggplot2::geom_jitter(ggplot2::aes(color = Group),
+                         position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+                         size = pt.size, alpha = 0.8, show.legend = FALSE) +
+
+    ggplot2::scale_fill_manual(values = cols) +
+    ggplot2::scale_color_manual(values = cols) +
+    ggplot2::scale_y_continuous(labels = scales::percent) +
+    ggplot2::theme_classic() +
+    ggplot2::labs(x = "", y = "Cell Proportion", fill = group.by) +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black"),
+      axis.text.y = ggplot2::element_text(color = "black"),
+      legend.position = "top",
+      panel.grid.major.y = ggplot2::element_line(color = "grey90", linetype = "dashed"),
+      ...
+    )
+
+  # 6. Add statistics
+  tryCatch({
+    p <- p + ggpubr::stat_compare_means(
+      comparisons = comparisons,
+      method = test.method,
+      label = label.type,
+      symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
+                         symbols = c("****", "***", "**", "*", "ns"))
+    )
+  }, error = function(e) {
+    message("Statistical annotation failed (possibly due to insufficient data). Returning plot without stats.")
+  })
 
   return(p)
 }

@@ -124,7 +124,7 @@ scVisDimPlot <- function(scRNA,
                          group.by = NULL,
                          split.by = NULL,
                          colors = NULL,
-                         pt.size = 0.05,
+                         pt.size = 0.15,
                          stroke = 0,
                          alpha = 1,
                          show.arrow = TRUE,
@@ -234,67 +234,25 @@ scVisDimPlot <- function(scRNA,
 
 # =============== CellRatioPlot  ================
 # =============== 3.scVisCellRatioPlot  ================
-#' @title Visualize Cell Type Proportion Differences
-#' @description Calculates cell type proportions per sample and performs statistical comparisons between groups.
-#' This function includes robust handling for missing cell types (filling with 0) to ensure accurate statistical testing.
-#' It combines boxplots (distribution) with jitter points (individual samples) and adds statistical significance annotations using `ggpubr`.
+#' @title Visualize Cell Type Proportion Differences (Fixed Stats)
+#' @description Calculates cell type proportions and performs statistical comparisons.
+#' Fixed the "missing value" error by correctly handling grouped statistical testing.
 #'
 #' @param sce A Seurat object.
-#' @param group.by Column name in meta.data distinguishing the conditions/groups (e.g., "Treatment", "Control").
-#' @param cell.type Column name in meta.data representing cell types/clusters (e.g., "celltype", "seurat_clusters"). Default is "celltype".
-#' @param sample.by Column name in meta.data representing biological replicates/samples (e.g., "orig.ident"). Default is "orig.ident".
-#' @param comparisons A list of vectors specifying the pairs to compare (e.g., list(c("Ctrl", "Treat"))). If NULL, performs global test or pairwise against ref depending on context.
-#' @param test.method Method for statistical test. Default "wilcox.test". Options: "t.test", "kruskal.test", "anova".
-#' @param label.type What to show for significance. Default "p.signif" (*, **, ns). Option: "p.format" (numeric value).
-#' @param cols Vector of colors for groups. If NULL, uses a default palette.
-#' @param pt.size Size of the jitter points representing samples. Default 1.5.
-#' @param width Bar/Box width. Default 0.6.
-#' @param ... Additional arguments passed to ggplot2 theme.
+#' @param group.by Column name for conditions (e.g., "Treatment").
+#' @param cell.type Column name for cell types.
+#' @param sample.by Column name for samples.
+#' @param test.method Default "wilcox.test".
+#' @param label.type Default "p.signif" (*).
+#' @param cols Colors.
+#' @param pt.size Point size.
+#' @param width Box width.
 #'
-#' @return A ggplot object with statistical annotations.
 #' @export
-#'
-#' @importFrom Seurat FetchData
-#' @importFrom dplyr group_by summarise mutate ungroup select count n
-#' @importFrom tidyr complete
-#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter theme_classic scale_fill_manual scale_color_manual scale_y_continuous labs element_text element_line position_dodge position_jitterdodge
-#' @importFrom ggpubr stat_compare_means
-#' @importFrom scales percent hue_pal
-#' @importFrom stats na.omit
-#'
-#' @examples
-#' \dontrun{
-#'   # 1. Basic usage: Two-group comparison (default Wilcoxon test)
-#'   # Automatically compares groups found in "treatment" column
-#'   scVisCellRatioPlot(sce,
-#'                      group.by = "treatment",
-#'                      cell.type = "cell_type",
-#'                      sample.by = "orig.ident")
-#'
-#'   # 2. Multi-group comparison with specific pairs
-#'   # Useful if you have 3 groups (A, B, C) and only want to compare A vs B and A vs C
-#'   my_comparisons <- list(c("A", "B"), c("A", "C"))
-#'
-#'   scVisCellRatioPlot(sce,
-#'                      group.by = "group",
-#'                      cell.type = "cell_type",
-#'                      sample.by = "orig.ident",
-#'                      comparisons = my_comparisons,
-#'                      test.method = "wilcox.test",
-#'                      label.type = "p.signif") # Display stars (*, **, ***)
-#'
-#'   # 3. Show numeric P-values instead of stars
-#'   scVisCellRatioPlot(sce,
-#'                      group.by = "treatment",
-#'                      cell.type = "cell_type",
-#'                      sample.by = "orig.ident",
-#'                      label.type = "p.format") # Display value (e.g., 0.0042)
-#' }
 scVisCellRatioPlot <- function(sce,
                                group.by,
                                cell.type = "celltype",
                                sample.by = "orig.ident",
-                               comparisons = NULL,
                                test.method = "wilcox.test",
                                label.type = "p.signif",
                                cols = NULL,
@@ -302,51 +260,41 @@ scVisCellRatioPlot <- function(sce,
                                width = 0.6,
                                ...) {
 
-  # 1. Check input columns
+  # 1. Check input
   if (!all(c(group.by, cell.type, sample.by) %in% colnames(sce@meta.data))) {
-    stop("One or more specified columns not found in meta.data.")
+    stop("Column not found in meta.data")
   }
 
-  # 2. Calculate proportions
+  # 2. Calculate Proportions
   message("Calculating cell proportions per sample...")
-
   meta_df <- Seurat::FetchData(sce, vars = c(group.by, cell.type, sample.by))
   colnames(meta_df) <- c("Group", "CellType", "Sample")
 
   ratio_data <- meta_df %>%
     dplyr::group_by(Sample, Group, CellType) %>%
     dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
-    # Critical step: fill missing combinations with 0 to avoid statistical bias
     tidyr::complete(Sample, CellType, fill = list(n = 0)) %>%
-    # Re-fill Group info which becomes NA after complete()
     dplyr::group_by(Sample) %>%
     dplyr::mutate(Group = unique(stats::na.omit(Group))) %>%
     dplyr::ungroup() %>%
-    # Calculate ratio
     dplyr::group_by(Sample) %>%
     dplyr::mutate(Ratio = n / sum(n)) %>%
     dplyr::ungroup()
 
-  # 3. Set colors
+  # 3. Colors
   if (is.null(cols)) {
     n_groups <- length(unique(ratio_data$Group))
     if (n_groups <= 10) {
-      cols <- c("#E64B35FF", "#4DBBD5FF", "#00A087FF", "#3C5488FF",
-                "#F39B7FFF", "#8491B4FF", "#91D1C2FF", "#DC0000FF", "#7E6148FF", "#B09C85FF")
+      cols <- c("#E64B35FF", "#4DBBD5FF", "#00A087FF", "#3C5488FF", "#F39B7FFF")
     } else {
       cols <- scales::hue_pal()(n_groups)
     }
   }
 
-  # 4. Auto-generate comparisons if needed
-  groups <- unique(ratio_data$Group)
-  if (is.null(comparisons) && length(groups) == 2) {
-    comparisons <- list(c(groups[1], groups[2]))
-  }
-
-  # 5. Plotting
+  # 4. Plotting
   p <- ggplot2::ggplot(ratio_data, ggplot2::aes(x = CellType, y = Ratio, fill = Group)) +
-    ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.8, width = width, position = ggplot2::position_dodge(width = 0.8)) +
+    ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.8, width = width,
+                          position = ggplot2::position_dodge(width = 0.8)) +
     ggplot2::geom_jitter(ggplot2::aes(color = Group),
                          position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
                          size = pt.size, alpha = 0.8, show.legend = FALSE) +
@@ -364,17 +312,20 @@ scVisCellRatioPlot <- function(sce,
       ...
     )
 
-  # 6. Add statistics
+  # 5. Statistical Tests (关键修复部分)
+  # 在分组箱线图中，不要传递 comparisons 参数，直接让 ggpubr 识别 group
   tryCatch({
     p <- p + ggpubr::stat_compare_means(
-      comparisons = comparisons,
+      aes(group = Group), # 显式告诉 ggplot 按 Group 分组进行比较
       method = test.method,
       label = label.type,
+      hide.ns = TRUE,    # 是否隐藏无意义的结果
       symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
                          symbols = c("****", "***", "**", "*", "ns"))
     )
   }, error = function(e) {
-    message("Statistical annotation failed (possibly due to insufficient data). Returning plot without stats.")
+    message("Statistical annotation failed. Returning plot without stats.")
+    print(e)
   })
 
   return(p)

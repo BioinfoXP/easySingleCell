@@ -10,7 +10,7 @@ scVisDimPlot(
   group.by = NULL,
   split.by = NULL,
   colors = NULL,
-  pt.size = 0.05,
+  pt.size = 0.15,
   stroke = 0,
   alpha = 1,
   show.arrow = TRUE,

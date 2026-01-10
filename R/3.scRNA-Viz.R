@@ -330,3 +330,108 @@ scVisCellRatioPlot <- function(sce,
 
   return(p)
 }
+
+
+
+# =============== Ro/e 分布偏好  ================
+# =============== 4.scVisRoePlot  ================
+# https://mp.weixin.qq.com/s/Fhz72Cjbd3zzCi1tB9xP5Q
+#' @title Visualize Ro/e (Tissue Enrichment) Heatmap
+#' @description Calculates and visualizes the Ratio of observed to expected (Ro/e) cell numbers,
+#' a metric popularized by Zemin Zhang's lab to quantify tissue enrichment/depletion preference.
+#'
+#' @param sce A Seurat object.
+#' @param group.by Column name in meta.data representing the tissue/group (e.g., "Tissue", "Group").
+#' @param cell.type Column name in meta.data representing cell types (e.g., "celltype").
+#' @param sample.by Column name in meta.data representing biological samples/patients (e.g., "orig.ident", "Patient").
+#' @param title The title of the heatmap. Default is "Ro/e Tissue Enrichment".
+#' @param method Statistical method for calculation. Default "chisq".
+#' @param min.rowSum Minimum row sum to keep a cell type. Default 0.
+#' @param display.mode Mode for cell annotation ("symbol", "numeric", "none").
+#' @param cluster_rows Logical, whether to cluster rows. Default TRUE.
+#' @param cluster_cols Logical, whether to cluster columns. Default FALSE.
+#' @param font.size Font size for numbers/symbols. Default 10.
+#' @param ... Additional arguments passed to \code{pheatmap}.
+#'
+#' @return A pheatmap object (invisibly returns the Ro/e matrix).
+#' @export
+#'
+#' @importFrom pheatmap pheatmap
+#' @importFrom grDevices colorRampPalette
+#'
+scVisRoePlot <- function(sce,
+                         group.by,
+                         cell.type = "celltype",
+                         sample.by = "orig.ident",
+                         title = "Ro/e Tissue Enrichment", # 新增标题参数
+                         method = "chisq",
+                         min.rowSum = 0,
+                         display.mode = c("symbol", "numeric", "none"),
+                         cluster_rows = TRUE,
+                         cluster_cols = FALSE,
+                         font.size = 10,
+                         ...) {
+
+  # 1. 检查依赖包 Startrac
+  if (!requireNamespace("Startrac", quietly = TRUE)) {
+    stop("Package 'Startrac' is required for Ro/e calculation.\nPlease install it using: devtools::install_github('Japrin/STARTRAC')")
+  }
+
+  # 2. 检查输入列
+  if (!all(c(group.by, cell.type, sample.by) %in% colnames(sce@meta.data))) {
+    stop("One or more specified columns not found in meta.data.")
+  }
+
+  display.mode <- match.arg(display.mode)
+
+  # 3. 计算 Ro/e 矩阵
+  message("Calculating Ro/e matrix using Startrac...")
+  meta_data <- sce@meta.data
+
+  # 调用 Startrac (注意：直接传 meta_data 作为第一个参数)
+  roe_mat <- Startrac::calTissueDist(meta_data,
+                                     byPatient = FALSE,
+                                     colname.cluster = cell.type,
+                                     colname.patient = sample.by,
+                                     colname.tissue = group.by,
+                                     method = method,
+                                     min.rowSum = min.rowSum)
+
+  # 4. 设置视觉风格
+  my_palette <- grDevices::colorRampPalette(c("#483D8B", "#00FFFF", "#F8F8FF", "#FF69B4", "#8B008B"))(100)
+
+  # 设置对称断点
+  max_abs_deviation <- max(abs(roe_mat - 1), na.rm = TRUE)
+  if (max_abs_deviation == 0) max_abs_deviation <- 0.1
+
+  my_breaks <- seq(1 - max_abs_deviation,
+                   1 + max_abs_deviation,
+                   length.out = 101)
+
+  # 5. 处理标注
+  if (display.mode == "symbol") {
+    display_mat <- ifelse(roe_mat > 1, "+++",
+                          ifelse(roe_mat > 0.8 & roe_mat <= 1, "++",
+                                 ifelse(roe_mat > 0.2 & roe_mat <= 0.8, "+",
+                                        ifelse(roe_mat > 0 & roe_mat <= 0.2, "+/-", "-"))))
+  } else if (display.mode == "numeric") {
+    display_mat <- TRUE
+  } else {
+    display_mat <- FALSE
+  }
+
+  # 6. 绘图 (将 title 传给 main 参数)
+  p <- pheatmap::pheatmap(roe_mat,
+                          color = my_palette,
+                          breaks = my_breaks,
+                          display_numbers = display_mat,
+                          fontsize_number = font.size,
+                          cluster_rows = cluster_rows,
+                          cluster_cols = cluster_cols,
+                          border_color = "grey90",
+                          scale = "none",
+                          main = title,  # 这里设置标题
+                          ...)
+
+  invisible(roe_mat)
+}

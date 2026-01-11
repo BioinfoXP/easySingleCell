@@ -29,7 +29,10 @@ Imports:
     patchwork,
     pheatmap,
     Seurat (>= 4.0.0),
-    tibble
+    tibble,
+    ggsignif,
+    cowplot,
+    rlang
 Suggests: 
     knitr,
     rmarkdown,

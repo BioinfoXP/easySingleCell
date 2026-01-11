@@ -232,8 +232,151 @@ scVisDimPlot <- function(scRNA,
 
 
 
+
+# =============== DotPlot  ================
+# =============== 3.scVisDotPlot  ================
+
+#' @title Visualize Marker Expression using a Styled DotPlot
+#' @description A wrapper around \code{Seurat::DotPlot} with enhanced aesthetics.
+#' Features customizable color palettes, refined legends (hollow circles), and consistent axis styling.
+#'
+#' @param object A Seurat object.
+#' @param features A vector of features (genes) to plot.
+#' @param group.by String. Name of the meta.data column to group the cells by. Default is NULL (uses active idents).
+#' @param pal Character vector. Custom color palette for the gradient.
+#' If NULL, defaults to \code{rev(RColorBrewer::brewer.pal(7, "RdBu"))}.
+#' @param rot_angle Numeric. Angle of x-axis text labels. Default is 45.
+#' @param font.size Numeric. Font size for axis labels. Default is 12.
+#' @param ... \strong{Additional arguments passed to Seurat::DotPlot}.
+#' Examples: \code{split.by}, \code{assay}, \code{cols} (will be overwritten by pal), \code{scale}.
+#'
+#' @return A ggplot object.
+#' @export
+#' @importFrom Seurat DotPlot
+#' @importFrom ggplot2 scale_color_gradientn scale_size_continuous guide_colorbar guide_legend guides theme_bw theme element_blank element_rect element_line element_text margin unit
+#' @importFrom RColorBrewer brewer.pal
+#'
+#' @examples
+#' \dontrun{
+#'   markers <- c("CD3D", "CD79A", "MS4A1", "CD14", "FCGR3A")
+#'
+#'   # 1. 默认用法 (45度旋转，RdBu配色，字体大小12)
+#'   scVisDotPlot(pbmc, features = markers)
+#'
+#'   # 2. 如果想改回90度
+#'   scVisDotPlot(pbmc, features = markers, rot_angle = 90)
+#'
+#'   # 3. 自定义配色
+#'   my_pal <- c("#2166ac", "#f7f7f7", "#b2182b")
+#'   scVisDotPlot(pbmc, features = markers, pal = my_pal)
+#' }
+scVisDotPlot <- function(object,
+                         features,
+                         group.by = NULL,
+                         pal = NULL,
+                         rot_angle = 45,  # 默认修改为 45 度
+                         font.size = 12,
+                         ...) {
+
+  # 1. 确定配色方案
+  if (is.null(pal)) {
+    if (requireNamespace("RColorBrewer", quietly = TRUE)) {
+      pal <- rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu"))
+    } else {
+      pal <- c("#2166AC", "#D1E5F0", "#F7F7F7", "#FDDBC7", "#B2182B")
+    }
+  }
+
+  # 2. 调用 Seurat::DotPlot
+  p <- Seurat::DotPlot(
+    object = object,
+    features = features,
+    group.by = group.by,
+    ...
+  )
+
+  # 3. 移除 Seurat 默认的颜色标尺
+  p$scales$scales <- list()
+
+  # 4. 应用美化图层
+  p <- p +
+    # --- 颜色设置 ---
+    ggplot2::scale_color_gradientn(
+      colors = pal,
+      guide = ggplot2::guide_colorbar(
+        title = "Mean expression",
+        barwidth = 0.8,
+        barheight = 4,
+        ticks = TRUE
+      )
+    ) +
+
+    # --- 大小设置 ---
+    ggplot2::scale_size_continuous(
+      range = c(0, 5),
+      breaks = c(25, 50, 75, 100),
+      labels = c("25", "50", "75", "100")
+    ) +
+
+    # --- 图例样式 ---
+    ggplot2::guides(
+      size = ggplot2::guide_legend(
+        title = "Fraction of cells (%)",
+        override.aes = list(
+          shape = 21,
+          colour = "black",
+          fill = NA,
+          stroke = 0.5
+        )
+      )
+    ) +
+
+    # --- 主题设置 ---
+    ggplot2::theme_bw() +
+    ggplot2::theme(
+      # 去除分面背景
+      strip.background = ggplot2::element_blank(),
+      strip.text = ggplot2::element_blank(),
+
+      # 面板间距与边框
+      panel.spacing = ggplot2::unit(0.1, "lines"),
+      panel.border = ggplot2::element_rect(color = "black", fill = NA, linewidth = 0.5),
+
+      # 网格线
+      panel.grid.major = ggplot2::element_line(color = "grey95", linewidth = 0.2),
+
+      # --- 字体美化核心区域 ---
+
+      # X轴: 基因名 (斜体), 黑色, 45度角优化
+      axis.text.x = ggplot2::element_text(
+        size = font.size,
+        color = "black",
+        face = "italic",
+        angle = rot_angle,
+        hjust = 1, # 45度时，hjust=1 保证文字末端对齐刻度
+        vjust = 1  # 45度时，vjust=1 保证文字不与轴线重叠
+      ),
+
+      # Y轴: 细胞类型 (常规), 黑色
+      axis.text.y = ggplot2::element_text(
+        size = font.size,
+        color = "black",
+        face = "plain"
+      ),
+
+      # 去除轴标题
+      axis.title = ggplot2::element_blank(),
+
+      # 页边距
+      plot.margin = ggplot2::margin(10, 10, 10, 10)
+    )
+
+  return(p)
+}
+
+
 # =============== CellRatioPlot  ================
-# =============== 3.scVisCellRatioPlot  ================
+# =============== 4.scVisCellRatioPlot  ================
 #' @title Visualize Cell Type Proportion Differences (Fixed Stats)
 #' @description Calculates cell type proportions and performs statistical comparisons.
 #' Fixed the "missing value" error by correctly handling grouped statistical testing.
@@ -270,15 +413,15 @@ scVisCellRatioPlot <- function(sce,
   meta_df <- Seurat::FetchData(sce, vars = c(group.by, cell.type, sample.by))
   colnames(meta_df) <- c("Group", "CellType", "Sample")
 
-  ratio_data <- meta_df %>%
-    dplyr::group_by(Sample, Group, CellType) %>%
-    dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
-    tidyr::complete(Sample, CellType, fill = list(n = 0)) %>%
+  ratio_data <- meta_df |>
+    dplyr::group_by(Sample, Group, CellType) |>
+    dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
+    tidyr::complete(Sample, CellType, fill = list(n = 0)) |>
+    dplyr::group_by(Sample) |>
+    dplyr::mutate(Group = unique(stats::na.omit(Group))) |>
+    dplyr::ungroup() |>
     dplyr::group_by(Sample) %>%
-    dplyr::mutate(Group = unique(stats::na.omit(Group))) %>%
-    dplyr::ungroup() %>%
-    dplyr::group_by(Sample) %>%
-    dplyr::mutate(Ratio = n / sum(n)) %>%
+    dplyr::mutate(Ratio = n / sum(n)) |>
     dplyr::ungroup()
 
   # 3. Colors
@@ -302,7 +445,7 @@ scVisCellRatioPlot <- function(sce,
     ggplot2::scale_fill_manual(values = cols) +
     ggplot2::scale_color_manual(values = cols) +
     ggplot2::scale_y_continuous(labels = scales::percent) +
-    ggplot2::theme_classic() +
+    ggpubr::theme_pubr() +
     ggplot2::labs(x = "", y = "Cell Proportion", fill = group.by) +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black"),
@@ -312,7 +455,7 @@ scVisCellRatioPlot <- function(sce,
       ...
     )
 
-  # 5. Statistical Tests (关键修复部分)
+  # 5. Statistical Tests
   # 在分组箱线图中，不要传递 comparisons 参数，直接让 ggpubr 识别 group
   tryCatch({
     p <- p + ggpubr::stat_compare_means(
@@ -334,7 +477,7 @@ scVisCellRatioPlot <- function(sce,
 
 
 # =============== Ro/e 分布偏好  ================
-# =============== 4.scVisRoePlot  ================
+# =============== 5.scVisRoePlot  ================
 # https://mp.weixin.qq.com/s/Fhz72Cjbd3zzCi1tB9xP5Q
 #' @title Visualize Ro/e (Tissue Enrichment) Heatmap
 #' @description Calculates and visualizes the Ratio of observed to expected (Ro/e) cell numbers,

@@ -121,6 +121,8 @@ BulkLimma <- function(exp_mat,
   return(DEG)
 }
 
+
+
 # =============== GSEA富集分析  ================
 # =============== 2. GSEA  ================
 #' @title Run GSEA Analysis (GO) with Pre-ranked List
@@ -194,6 +196,4 @@ BulkGseGO <- function(gene_rank,
   message(paste("GSEA Done. Significant terms:", nrow(gse_res)))
   return(gse_res)
 }
-
-
 

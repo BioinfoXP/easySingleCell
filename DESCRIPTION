@@ -20,6 +20,7 @@ Imports:
     CytoTRACE,
     dplyr,
     ggplot2 (>= 3.5.0),
+    RColorBrewer,
     limma,
     magrittr,
     Matrix,

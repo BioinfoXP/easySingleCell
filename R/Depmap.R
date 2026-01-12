@@ -1,36 +1,37 @@
 # =============== DepMap Core ================
 # =============== 1.DepmapPrepare ================
 
-#' @title Prepare DepMap Data (Manual Download Guide)
-#' @description Checks for DepMap CSV files. If missing, provides specific download links
-#' (including fast mirror and official sources) and instructions.
-#' If present, processes data into an .Rdata file.
+#' @title Prepare DepMap Data (Including Metadata & Robust Checks)
+#' @description Cleans DepMap CSVs (Effect, Dependency, Expression) and Metadata (Model.csv).
+#' Features a beautiful error message with direct download links if files are missing.
 #'
-#' @param target_genes Character vector. Genes of interest to extract.
-#' @param data_dir String. Directory to store data. Default "./Depmap".
-#' @param force_process Logical. If TRUE, re-processes the CSVs even if RData exists. Default FALSE.
+#' @param data_dir String. Directory containing the raw CSV files. Default "./Depmap".
+#' @param force_process Logical. If TRUE, re-processes CSVs even if RData exists. Default FALSE.
 #'
 #' @export
 #' @importFrom data.table fread
-#' @importFrom dplyr distinct
-DepmapPrepare <- function(target_genes,
-                          data_dir = "./Depmap",
+#' @importFrom dplyr distinct select all_of
+#' @importFrom tibble column_to_rownames
+DepmapPrepare <- function(data_dir = "./Depmap",
                           force_process = FALSE) {
 
   # 1. 建立目录
-  if (!dir.exists(data_dir)) {
-    dir.create(data_dir, recursive = TRUE)
-  }
+  if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
 
-  # 定义必须存在的 3 个文件名
-  required_files <- c(
-    "CRISPRGeneEffect.csv",
-    "CRISPRGeneDependency.csv",
-    "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv"
+  # 定义所有需要的文件 (包含 Model.csv)
+  # 使用 list 方便后续按名称调用
+  target_files <- list(
+    eff = "CRISPRGeneEffect.csv",
+    dep = "CRISPRGeneDependency.csv",
+    exp = "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
+    meta = "Model.csv"
   )
 
-  # 检查文件是否缺失
-  missing_files <- required_files[!file.exists(file.path(data_dir, required_files))]
+  # 将 list 转为字符向量用于检查文件是否存在
+  required_filenames <- unlist(target_files)
+
+  # 检查缺失文件
+  missing_files <- required_filenames[!file.exists(file.path(data_dir, required_filenames))]
 
   # === 场景 A: 文件缺失 -> 打印详细指引并停止 ===
   if (length(missing_files) > 0) {
@@ -59,6 +60,8 @@ DepmapPrepare <- function(target_genes,
     message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=CRISPRGeneDependency.csv")
     message("   3️⃣ OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv:")
     message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv")
+    message("   4️⃣ Model.csv (Metadata):")
+    message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=Model.csv")
 
     message("\n📂 ACTION REQUIRED:")
     message("   Download the files and move them into this folder:")
@@ -79,49 +82,85 @@ DepmapPrepare <- function(target_genes,
   }
 
   message("✅ Files found! Starting data processing...")
-  message(">>> Step 1/3: Reading CSVs (This may take 1-2 minutes)...")
+  message(">>> Step 1/4: Reading CSVs (This may take 1-2 minutes)...")
 
-  # 内部读取函数
-  read_clean <- function(fname) {
+  # --- Helper 1: Process Data Matrices ---
+  process_data_matrix <- function(fname) {
+    message(paste("   Processing Matrix:", fname, "..."))
     fpath <- file.path(data_dir, fname)
     df <- data.table::fread(fpath, data.table = FALSE)
-    colnames(df)[1] <- "ModelID"
-    # 清洗列名: "A1BG (1)" -> "A1BG"
-    colnames(df) <- c("ModelID", sub("\\s\\(.*\\)", "", colnames(df)[-1]))
-    df <- df[!duplicated(df$ModelID), ]
-    rownames(df) <- df$ModelID
-    df$ModelID <- NULL
-    return(df)
+
+    # Smart ID finding
+    target_id_col <- NULL
+    if ("ModelID" %in% colnames(df)) target_id_col <- "ModelID"
+    else if ("DepMap_ID" %in% colnames(df)) target_id_col <- "DepMap_ID"
+    else target_id_col <- colnames(df)[1]
+
+    # Clean Gene Names
+    gene_cols <- setdiff(colnames(df), target_id_col)
+    clean_gene_cols <- sub("\\s\\(.*\\)", "", gene_cols)
+
+    # Reconstruct
+    df_clean <- df[, c(target_id_col, gene_cols)]
+    colnames(df_clean) <- c("ModelID", clean_gene_cols)
+
+    # Deduplicate
+    df_clean <- df_clean %>%
+      dplyr::distinct(ModelID, .keep_all = TRUE) %>%
+      tibble::column_to_rownames(var = "ModelID")
+
+    return(df_clean)
   }
 
-  df_eff <- read_clean(required_files[1])
-  df_dep <- read_clean(required_files[2])
-  df_exp <- read_clean(required_files[3])
+  # --- Helper 2: Process Metadata ---
+  process_metadata <- function(fname) {
+    message(paste("   Processing Metadata:", fname, "..."))
+    fpath <- file.path(data_dir, fname)
+    df <- data.table::fread(fpath, data.table = FALSE)
 
-  message(">>> Step 2/3: Intersecting cell lines and genes...")
-  common_cells <- Reduce(intersect, list(rownames(df_eff), rownames(df_dep), rownames(df_exp)))
+    if (!"ModelID" %in% colnames(df)) stop("Model.csv must contain a 'ModelID' column.")
 
-  valid_genes <- intersect(target_genes, colnames(df_eff))
-  if (length(valid_genes) == 0) stop("No valid genes found in the datasets! Check gene symbols.")
+    df_clean <- df %>%
+      dplyr::distinct(ModelID, .keep_all = TRUE) %>%
+      tibble::column_to_rownames(var = "ModelID")
 
-  missing_genes <- setdiff(target_genes, valid_genes)
-  if (length(missing_genes) > 0) {
-    warning("Some genes were not found: ", paste(missing_genes, collapse = ", "))
+    return(df_clean)
   }
 
-  depmap_list <- list(
-    effect = df_eff[common_cells, valid_genes, drop = FALSE],
-    dependency = df_dep[common_cells, valid_genes, drop = FALSE],
-    expression = df_exp[common_cells, valid_genes, drop = FALSE],
-    genes = valid_genes,
-    timestamp = Sys.time()
-  )
+  # --- Execution ---
+  depmap_effect     <- process_data_matrix(target_files$eff)
+  depmap_dependency <- process_data_matrix(target_files$dep)
+  depmap_expression <- process_data_matrix(target_files$exp)
+  depmap_metadata   <- process_metadata(target_files$meta)
 
-  message(paste(">>> Step 3/3: Saving RData to", rdata_path))
-  save(depmap_list, file = rdata_path)
-  message("🎉 Done! You can now run DepmapBox(), DepmapHeatmap(), etc.")
+  # --- Intersection ---
+  message(">>> Step 2/4: Intersecting common cell lines across 4 datasets...")
+  common_ids <- Reduce(intersect, list(
+    row.names(depmap_effect),
+    row.names(depmap_dependency),
+    row.names(depmap_expression),
+    row.names(depmap_metadata)
+  ))
+
+  if (length(common_ids) == 0) stop("❌ ERROR: 0 Common Cell Lines found! Check ID formats.")
+
+  message(paste("    ✅ Common Cell Lines found:", length(common_ids)))
+
+  # --- Alignment ---
+  message(">>> Step 3/4: Aligning data matrices...")
+  depmap_effect     <- depmap_effect[common_ids, ]
+  depmap_dependency <- depmap_dependency[common_ids, ]
+  depmap_expression <- depmap_expression[common_ids, ]
+  depmap_metadata   <- depmap_metadata[common_ids, ]
+
+  # --- Save ---
+  message(paste(">>> Step 4/4: Saving objects to", rdata_path))
+  all_genes <- colnames(depmap_effect)
+
+  save(depmap_effect, depmap_dependency, depmap_expression, depmap_metadata, all_genes, file = rdata_path)
+
+  message("🎉 Done! Data is ready (Matrix + Metadata).")
 }
-
 # =============== DepMap Viz ================
 # =============== 2.DepmapBox ================
 

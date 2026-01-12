@@ -2,19 +2,16 @@
 % Please edit documentation in R/Depmap.R
 \name{DepmapPrepare}
 \alias{DepmapPrepare}
-\title{Prepare DepMap Data (Manual Download Guide)}
+\title{Prepare DepMap Data (Including Metadata & Robust Checks)}
 \usage{
-DepmapPrepare(target_genes, data_dir = "./Depmap", force_process = FALSE)
+DepmapPrepare(data_dir = "./Depmap", force_process = FALSE)
 }
 \arguments{
-\item{target_genes}{Character vector. Genes of interest to extract.}
+\item{data_dir}{String. Directory containing the raw CSV files. Default "./Depmap".}
 
-\item{data_dir}{String. Directory to store data. Default "./Depmap".}
-
-\item{force_process}{Logical. If TRUE, re-processes the CSVs even if RData exists. Default FALSE.}
+\item{force_process}{Logical. If TRUE, re-processes CSVs even if RData exists. Default FALSE.}
 }
 \description{
-Checks for DepMap CSV files. If missing, provides specific download links
-(including fast mirror and official sources) and instructions.
-If present, processes data into an .Rdata file.
+Cleans DepMap CSVs (Effect, Dependency, Expression) and Metadata (Model.csv).
+Features a beautiful error message with direct download links if files are missing.
 }

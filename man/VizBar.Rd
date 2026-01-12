@@ -73,7 +73,7 @@ automatic pairwise comparisons, and options for SD/SE error bars.
 \dontrun{
   # 1. 默认显示散点
   VizBar(df, x_col = "Group", y_col = "Value")
-  
+
   # 2. 隐藏散点 (add_dots = FALSE)
   VizBar(df, x_col = "Group", y_col = "Value", add_dots = FALSE)
 }

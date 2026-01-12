@@ -67,7 +67,7 @@ custom aesthetics (jitter + clean theme), and automatic pairwise comparisons.
 \dontrun{
   # 1. 默认显示散点
   VizBox(df, x_col = "Group", y_col = "Value")
-  
+
   # 2. 隐藏散点 (适用于大数据量)
   VizBox(df, x_col = "Group", y_col = "Value", add_dots = FALSE)
 }

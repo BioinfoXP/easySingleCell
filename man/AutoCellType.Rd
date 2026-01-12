@@ -19,42 +19,47 @@ AutoCellType(
 )
 }
 \arguments{
-\item{input}{Data frame (must contain columns: cluster, gene, avg_log2FC) or a named list of gene vectors.}
+\item{input}{Data frame (must contain: cluster, gene, avg_log2FC) or a named list of gene vectors.}
 
-\item{tissuename}{Character string. Tissue origin (e.g., "Liver", "PBMC").}
+\item{tissuename}{Character. Tissue origin (e.g., "Liver").}
 
-\item{cellname}{Optional character string. Parent cell type (e.g., "T cells", used for sub-clustering).}
+\item{cellname}{Character (Optional). Parent cell type for sub-clustering (e.g., "T cells").}
 
-\item{background}{Optional character string. \strong{Crucial for smart annotation}. Experimental context (e.g., "Tumor microenvironment, Sorafenib resistance").}
+\item{background}{Character (Optional). Experimental context (e.g., "Sorafenib treated HCC").}
 
-\item{annotation_level}{Character string. "major" (lineage level) or "subtype" (specific state).}
+\item{annotation_level}{Character. "major" (lineage) or "subtype" (functional state).}
 
-\item{model}{Character string. Model name (default: "gpt-4o").}
+\item{model}{Character. Model name (default: "gpt-4o").}
 
-\item{topgenenumber}{Integer. Number of top marker genes to use per cluster (default: 20).}
+\item{topgenenumber}{Integer. Top N markers per cluster (default: 20).}
 
-\item{base_url}{Character string. API endpoint (default: "https://api.gpt.ge/v1").}
+\item{base_url}{Character. API endpoint (default: "https://api.gpt.ge/v1").}
 
-\item{api_key}{Character string. API Key (if NULL, looks for OPENAI_API_KEY env variable).}
+\item{api_key}{Character. API Key (if NULL, checks OPENAI_API_KEY env var).}
 
-\item{retries}{Integer. Maximum retry attempts for API calls (default: 3).}
+\item{retries}{Integer. Max API retry attempts (default: 3).}
 
-\item{verbose}{Logical. Whether to print progress logs (default: TRUE).}
+\item{verbose}{Logical. Print progress logs (default: TRUE).}
 }
 \value{
-A tibble with columns: Cluster, Cell_Type, Confidence, Reasoning, Annotation_Level.
+A tibble with columns: Cluster, Prediction, Confidence, Reasoning.
 }
 \description{
-Leverages GPT models to annotate cell types based on marker genes.
-This function enforces STRICT JSON output to ensure stability and provides
-"Reasoning" and "Confidence" scores to make the results interpretable.
+A production-ready function for cell type annotation with GPT models.
+
+Key Features:
+\enumerate{
+\item \strong{Robust Parsing}: Uses Regex to extract JSON, handling cases where the model adds conversational text.
+\item \strong{Context Aware}: Explicitly handles 'major' vs 'subtype' annotation levels in the prompt.
+\item \strong{Quality Control}: Automatically flags mitochondrial/stress signatures.
+}
 }
 \details{
-Automated Cell Type Annotation with GPT Models
+Automated Cell Type Annotation with GPT Models (Stable Version)
 }
 \examples{
 \dontrun{
-  # --- 1. Prepare Test Data (Simulated Liver T cell subtypes) ---
+  # --- 1. Prepare Mock Data (Simulated Liver T cell subtypes) ---
   library(tibble)
   test_markers <- tibble::tribble(
     ~cluster, ~gene,     ~avg_log2FC,
@@ -62,16 +67,16 @@ Automated Cell Type Annotation with GPT Models
     "0",      "CD8A",    2.3,
     "0",      "GZMB",    1.8,
     "1",      "CD3E",    2.4,
-    "1",      "FOXP3",   2.5, # Treg marker
+    "1",      "FOXP3",   2.5, # Treg
     "1",      "IL2RA",   1.8,
     "2",      "CD3D",    2.1,
-    "2",      "PDCD1",   1.9, # Exhaustion marker
+    "2",      "PDCD1",   1.9, # Exhausted
     "2",      "HAVCR2",  1.6
   )
 
   # --- 2. Run Annotation ---
   # Replace with your actual API Key
-  my_key <- "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  my_key <- "sk-your_actual_api_key_here"
 
   result <- AutoCellType(
     input = test_markers,
@@ -84,7 +89,5 @@ Automated Cell Type Annotation with GPT Models
 
   # --- 3. View Results ---
   print(result)
-  # Expected output should include a 'Reasoning' column explaining
-  # why Cluster 1 is Treg (based on FOXP3) etc.
 }
 }

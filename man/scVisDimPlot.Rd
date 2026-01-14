@@ -15,6 +15,11 @@ scVisDimPlot(
   alpha = 1,
   show.arrow = TRUE,
   show.axis.title = FALSE,
+  label = FALSE,
+  label.size = 4,
+  label.color = "black",
+  repel = FALSE,
+  label.box = FALSE,
   strip.color = "#e6bac5",
   legend.position = "right",
   aspect.ratio = 1,
@@ -30,28 +35,37 @@ scVisDimPlot(
 
 \item{split.by}{Vector of meta.data columns to split by (facet).}
 
-\item{colors}{Vector of colors. If NULL, uses a default "Zhang Lab" style palette.}
+\item{colors}{Vector of colors.}
 
-\item{pt.size}{Point size. Default is 0.05 (crucial for the "misty" look).}
+\item{pt.size}{Point size. Default is 0.05.}
 
-\item{stroke}{Point stroke thickness. Default is 0 (crucial for the "misty" look).}
+\item{stroke}{Point stroke thickness. Default is 0.}
 
 \item{alpha}{Point transparency. Default is 1.}
 
 \item{show.arrow}{Logical, whether to show arrows on axes. Default TRUE.}
 
-\item{show.axis.title}{Logical, whether to show axis titles (e.g. UMAP_1). Default FALSE.}
+\item{show.axis.title}{Logical, whether to show axis titles. Default FALSE.}
 
-\item{strip.color}{Background color for facet strips. Default "#e6bac5".}
+\item{label}{Logical, whether to label the clusters. Default FALSE.}
 
-\item{legend.position}{Position of legend ("right", "bottom", "none", etc.). Default "right".}
+\item{label.size}{Numeric, size of the label text. Default 4.}
 
-\item{...}{Additional arguments passed to ggplot2 theme.}
+\item{label.color}{String, color of the label text. Default "black".}
+
+\item{repel}{Logical, whether to use ggrepel to avoid overlap. Default FALSE.}
+
+\item{label.box}{Logical, whether to draw a box around the label. Default FALSE.}
+
+\item{strip.color}{Background color for facet strips.}
+
+\item{legend.position}{Position of legend.}
+
+\item{...}{Additional arguments.}
 }
 \value{
 A ggplot object.
 }
 \description{
-Creates a DimPlot with a "cloud/misty" aesthetic commonly seen in Zemin Zhang's lab publications.
-Key features include small point sizes, zero stroke, and arrowed axes.
+Creates a DimPlot with a "cloud/misty" aesthetic.
 }

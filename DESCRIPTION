@@ -1,6 +1,6 @@
 Package: easySingleCell
 Title: Accelerate Bioinformatics Analysis for Bulk, scRNA-seq, and stRNA-seq
-Version: 0.0.9
+Version: 1.0.1
 Authors@R: 
     person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
@@ -19,6 +19,7 @@ Imports:
     clusterProfiler,
     CytoTRACE,
     dplyr,
+    tidyr,
     ggplot2 (>= 3.5.0),
     RColorBrewer,
     limma,
@@ -31,12 +32,15 @@ Imports:
     Seurat (>= 4.0.0),
     tibble,
     ggsignif,
+    ggpubr,
     cowplot,
     rlang
 Suggests: 
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    jsonlite,
+    openai
 VignetteBuilder: knitr
 URL: https://github.com/BioinfoXP/easySingleCell
 BugReports: https://github.com/BioinfoXP/easySingleCell/issues

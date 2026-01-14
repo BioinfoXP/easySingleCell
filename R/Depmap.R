@@ -105,8 +105,8 @@ DepmapPrepare <- function(data_dir = "./Depmap",
     colnames(df_clean) <- c("ModelID", clean_gene_cols)
 
     # Deduplicate
-    df_clean <- df_clean %>%
-      dplyr::distinct(ModelID, .keep_all = TRUE) %>%
+    df_clean <- df_clean |>
+      dplyr::distinct(ModelID, .keep_all = TRUE) |>
       tibble::column_to_rownames(var = "ModelID")
 
     return(df_clean)
@@ -120,8 +120,8 @@ DepmapPrepare <- function(data_dir = "./Depmap",
 
     if (!"ModelID" %in% colnames(df)) stop("Model.csv must contain a 'ModelID' column.")
 
-    df_clean <- df %>%
-      dplyr::distinct(ModelID, .keep_all = TRUE) %>%
+    df_clean <- df |>
+      dplyr::distinct(ModelID, .keep_all = TRUE) |>
       tibble::column_to_rownames(var = "ModelID")
 
     return(df_clean)
@@ -535,10 +535,10 @@ DepmapMetaSelect <- function(query,
 
   # 6. Parse
   raw_text <- resp$choices[[1]]$message$content
-  clean_text <- raw_text %>%
-    stringr::str_remove_all("^```json") %>%
-    stringr::str_remove_all("^```") %>%
-    stringr::str_remove_all("```$") %>%
+  clean_text <- raw_text |>
+    stringr::str_remove_all("^```json") |>
+    stringr::str_remove_all("^```") |>
+    stringr::str_remove_all("```$") |>
     trimws()
 
   parsed <- tryCatch({ jsonlite::fromJSON(clean_text) }, error = function(e) stop("JSON Parsing Failed."))

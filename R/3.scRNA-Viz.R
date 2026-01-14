@@ -97,28 +97,34 @@ scVisFeaturePlot <- function(scRNA,
 # =============== DimPlot  ================
 # =============== 2.scVisDimPlot  ================
 #' @title Cloud/Misty Style DimPlot (Zemin Zhang Style)
-#' @description Creates a DimPlot with a "cloud/misty" aesthetic commonly seen in Zemin Zhang's lab publications.
-#' Key features include small point sizes, zero stroke, and arrowed axes.
+#' @description Creates a DimPlot with a "cloud/misty" aesthetic.
 #'
 #' @param scRNA A Seurat object.
 #' @param reduction Reduction method (default "umap").
 #' @param group.by Vector of meta.data columns to group by (color).
 #' @param split.by Vector of meta.data columns to split by (facet).
-#' @param colors Vector of colors. If NULL, uses a default "Zhang Lab" style palette.
-#' @param pt.size Point size. Default is 0.05 (crucial for the "misty" look).
-#' @param stroke Point stroke thickness. Default is 0 (crucial for the "misty" look).
+#' @param colors Vector of colors.
+#' @param pt.size Point size. Default is 0.05.
+#' @param stroke Point stroke thickness. Default is 0.
 #' @param alpha Point transparency. Default is 1.
 #' @param show.arrow Logical, whether to show arrows on axes. Default TRUE.
-#' @param show.axis.title Logical, whether to show axis titles (e.g. UMAP_1). Default FALSE.
-#' @param strip.color Background color for facet strips. Default "#e6bac5".
-#' @param legend.position Position of legend ("right", "bottom", "none", etc.). Default "right".
-#' @param ... Additional arguments passed to ggplot2 theme.
+#' @param show.axis.title Logical, whether to show axis titles. Default FALSE.
+#' @param label Logical, whether to label the clusters. Default FALSE.
+#' @param label.size Numeric, size of the label text. Default 4.
+#' @param label.color String, color of the label text. Default "black".
+#' @param repel Logical, whether to use ggrepel to avoid overlap. Default FALSE.
+#' @param label.box Logical, whether to draw a box around the label. Default FALSE.
+#' @param strip.color Background color for facet strips.
+#' @param legend.position Position of legend.
+#' @param ... Additional arguments.
 #'
 #' @return A ggplot object.
 #' @export
 #'
-#' @importFrom Seurat FetchData
-#' @importFrom ggplot2 ggplot aes geom_point scale_color_manual theme_classic theme element_blank element_line element_rect element_text arrow unit facet_wrap facet_grid labs guide_legend guides
+#' @importFrom Seurat FetchData Idents
+#' @importFrom ggplot2 ggplot aes geom_point scale_color_manual theme_classic theme labs element_blank element_line element_rect element_text arrow unit facet_wrap guides guide_legend geom_text geom_label
+#' @importFrom ggrepel geom_text_repel geom_label_repel
+#' @importFrom stats aggregate median
 scVisDimPlot <- function(scRNA,
                          reduction = "umap",
                          group.by = NULL,
@@ -128,7 +134,12 @@ scVisDimPlot <- function(scRNA,
                          stroke = 0,
                          alpha = 1,
                          show.arrow = TRUE,
-                         show.axis.title = FALSE, # 新增参数：控制轴标题显示
+                         show.axis.title = FALSE,
+                         label = FALSE,        # 新增：是否标记
+                         label.size = 4,       # 新增：字体大小
+                         label.color = "black",# 新增：字体颜色
+                         repel = FALSE,        # 新增：是否防重叠
+                         label.box = FALSE,    # 新增：是否加背景框
                          strip.color = "#e6bac5",
                          legend.position = "right",
                          aspect.ratio = 1,
@@ -139,13 +150,11 @@ scVisDimPlot <- function(scRNA,
     stop(paste("Reduction", reduction, "not found in object."))
   }
 
-  # 获取坐标列名 (例如 UMAP_1, UMAP_2)
   emb <- scRNA[[reduction]]
   dims <- colnames(emb)[1:2]
   key <- emb@key
 
   # 2. 准备绘图数据
-  # 如果没有指定 group.by，默认使用当前的 Idents
   if (is.null(group.by)) {
     group.by <- "ident"
     plot_data <- Seurat::FetchData(scRNA, vars = c(dims, split.by))
@@ -154,18 +163,14 @@ scVisDimPlot <- function(scRNA,
     plot_data <- Seurat::FetchData(scRNA, vars = c(dims, group.by, split.by))
   }
 
-  # 确保分组变量是因子
   group_col <- if (is.null(group.by)) "ident" else group.by
   plot_data[[group_col]] <- as.factor(plot_data[[group_col]])
 
-  # 3. 设置默认颜色 (参考原文配色)
+  # 3. 设置默认颜色
   if (is.null(colors)) {
-    # 原文中的低饱和度高级灰配色
     colors <- c("#919ac2","#ffac98","#70a4c8","#a5a9af","#63917d",
                 "#dbd1b4","#6e729a","#9ba4bd","#c5ae5f","#b9b8d6",
                 "#E64B35FF","#4DBBD5FF","#00A087FF","#3C5488FF")
-
-    # 如果类别数超过颜色数，扩展颜色
     n_groups <- length(levels(plot_data[[group_col]]))
     if (n_groups > length(colors)) {
       colors <- scales::hue_pal()(n_groups)
@@ -179,11 +184,45 @@ scVisDimPlot <- function(scRNA,
     ggplot2::geom_point(size = pt.size, shape = 16, stroke = stroke, alpha = alpha) +
     ggplot2::scale_color_manual(values = colors) +
     ggplot2::theme_classic() +
-    ggplot2::labs(x = dims[1], y = dims[2]) # 这里已经设置了标题内容
+    ggplot2::labs(x = dims[1], y = dims[2])
+
+  # ================== 新增 Label 处理逻辑 ==================
+  if (label) {
+    # 计算每个群体的中心点 (Median)
+    # 如果有 split.by，需要按 group + split 分组计算
+    if (!is.null(split.by)) {
+      group_vars <- c(group_col, split.by)
+    } else {
+      group_vars <- c(group_col)
+    }
+
+    # 使用 base R aggregate 计算中位数，避免增加 dplyr 依赖
+    label_data <- stats::aggregate(
+      list(x = plot_data[[dims[1]]], y = plot_data[[dims[2]]]),
+      by = plot_data[group_vars],
+      FUN = stats::median
+    )
+
+    # 定义绘图参数
+    geom_fun <- if (label.box) {
+      if (repel) ggrepel::geom_label_repel else ggplot2::geom_label
+    } else {
+      if (repel) ggrepel::geom_text_repel else ggplot2::geom_text
+    }
+
+    # 添加标签图层
+    p <- p + geom_fun(
+      data = label_data,
+      ggplot2::aes_string(x = "x", y = "y", label = group_col),
+      color = label.color,
+      size = label.size,
+      show.legend = FALSE,
+      inherit.aes = FALSE # 关键：不继承主图的aes，防止报错
+    )
+  }
+  # =======================================================
 
   # 5. 应用“张泽民团队”风格主题
-
-  # 定义坐标轴线条样式 (带箭头)
   axis_line_setting <- if (show.arrow) {
     ggplot2::element_line(colour = "black", size = 0.3,
                           arrow = ggplot2::arrow(length = ggplot2::unit(0.1, "cm"), type = "closed"))
@@ -191,35 +230,28 @@ scVisDimPlot <- function(scRNA,
     ggplot2::element_line(colour = "black", size = 0.3)
   }
 
-  # 定义坐标轴标题样式 (新增逻辑)
   axis_title_setting <- if (show.axis.title) {
-    ggplot2::element_text(size = 10, face = "plain", color = "black") # 如果True，显示文字
+    ggplot2::element_text(size = 10, face = "plain", color = "black")
   } else {
-    ggplot2::element_blank() # 如果False，隐藏文字
+    ggplot2::element_blank()
   }
 
   p <- p + ggplot2::theme(
     plot.background = ggplot2::element_blank(),
     panel.grid.major = ggplot2::element_blank(),
     panel.grid.minor = ggplot2::element_blank(),
-
-    # 坐标轴设置
-    axis.title = axis_title_setting,   # 应用刚才定义的标题样式
+    axis.title = axis_title_setting,
     axis.text = ggplot2::element_blank(),
     axis.ticks = ggplot2::element_blank(),
     axis.line = axis_line_setting,
-
-    # 图例和比例
     legend.position = legend.position,
     aspect.ratio = aspect.ratio,
-
-    # 分面标题背景 (Strip)
     strip.background = ggplot2::element_rect(fill = strip.color, color = NA),
     strip.text = ggplot2::element_text(size = 8, face = "bold"),
     strip.placement = "outside"
   )
 
-  # 6. 处理分面 (Split.by)
+  # 6. 处理分面
   if (!is.null(split.by)) {
     p <- p + ggplot2::facet_wrap(as.formula(paste("~", split.by)))
   }
@@ -229,7 +261,6 @@ scVisDimPlot <- function(scRNA,
 
   return(p)
 }
-
 
 
 
@@ -420,7 +451,7 @@ scVisCellRatioPlot <- function(sce,
     dplyr::group_by(Sample) |>
     dplyr::mutate(Group = unique(stats::na.omit(Group))) |>
     dplyr::ungroup() |>
-    dplyr::group_by(Sample) %>%
+    dplyr::group_by(Sample) |>
     dplyr::mutate(Ratio = n / sum(n)) |>
     dplyr::ungroup()
 

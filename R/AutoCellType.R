@@ -88,11 +88,11 @@ AutoCellType <- function(
     if (inherits(dat, "data.frame")) {
       req_cols <- c("cluster", "gene", "avg_log2FC")
       if (!all(req_cols %in% colnames(dat))) stop("Input must contain columns: ", paste(req_cols, collapse=", "))
-      dat %>%
-        dplyr::filter(avg_log2FC > 0) %>%
-        dplyr::group_by(cluster) %>%
-        dplyr::slice_max(order_by = avg_log2FC, n = n) %>%
-        dplyr::summarise(genes = paste0(gene, collapse = ", "), .groups = "drop") %>%
+      dat |>
+        dplyr::filter(avg_log2FC > 0) |>
+        dplyr::group_by(cluster) |>
+        dplyr::slice_max(order_by = avg_log2FC, n = n) |>
+        dplyr::summarise(genes = paste0(gene, collapse = ", "), .groups = "drop") |>
         tibble::deframe()
     } else if (inherits(dat, "list")) {
       sapply(dat, function(x) paste0(head(x, n), collapse = ", "))
@@ -257,14 +257,14 @@ AutoCellType <- function(
       return(res)
     })
 
-    final <- results %>%
+    final <- results |>
       dplyr::rename(
         Cluster = cluster_id,
         Prediction = cell_type,
         Confidence = confidence,
         Reasoning = reasoning
-      ) %>%
-      dplyr::mutate(Annotation_Level = annotation_level) %>%
+      ) |>
+      dplyr::mutate(Annotation_Level = annotation_level) |>
       dplyr::select(Cluster, Prediction, Confidence, Reasoning, Annotation_Level)
 
     if (verbose) message("=== Done ===")

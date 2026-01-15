@@ -14,7 +14,7 @@
 #' @param cellname Character (Optional). Parent cell type for sub-clustering (e.g., "T cells").
 #' @param background Character (Optional). Experimental context (e.g., "Sorafenib treated HCC").
 #' @param annotation_level Character. "major" (lineage) or "subtype" (functional state).
-#' @param model Character. Model name (default: "gpt-4o").
+#' @param model Character. Model name (default: "gpt-5-nano").
 #' @param topgenenumber Integer. Top N markers per cluster (default: 20).
 #' @param base_url Character. API endpoint (default: "https://api.gpt.ge/v1").
 #' @param api_key Character. API Key (if NULL, checks OPENAI_API_KEY env var).
@@ -63,7 +63,7 @@ AutoCellType <- function(
     cellname = NULL,
     background = "",
     annotation_level = "major",
-    model = "gpt-4o",
+    model = "gpt-5-nano",
     topgenenumber = 20,
     base_url = "https://api.gpt.ge/v1",
     api_key = NULL,

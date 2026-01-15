@@ -609,3 +609,371 @@ scVisRoePlot <- function(sce,
 
   invisible(roe_mat)
 }
+
+
+
+
+
+# =============== scVisCellFC  ================
+# =============== 6.scVisCellFC  ================
+#' @title scVis: Cell Type Log2FC Plot
+#' @description Calculates and visualizes the Log2 Fold Change of cell type proportions between groups.
+#' Uses base R pipe (R >= 4.1.0).
+#'
+#' @param sce A Seurat object.
+#' @param group_col String. Column name in \code{meta.data} for grouping (e.g., "group", "condition").
+#' @param celltype_col String. Column name in \code{meta.data} for cell types (e.g., "cell_type", "cluster").
+#' @param comparisons A list of character vectors. Each vector must contain two group names: c("Case", "Control").
+#' @param palette Vector. Custom colors. Defaults to NPG style.
+#' @param labels Logical. Whether to show cell type labels on bars. Default TRUE.
+#' @param label_size Numeric. Font size for labels on bars. Default 3.5.
+#' @param base_size Numeric. Base font size for the plot theme. Default 12.
+#'
+#' @return A ggplot object.
+#' @export
+#'
+#' @importFrom dplyr group_by summarise mutate ungroup select filter rename full_join bind_rows
+#' @importFrom tidyr complete
+#' @importFrom ggplot2 ggplot aes geom_col geom_hline facet_wrap scale_fill_manual theme_classic labs theme element_blank element_text element_line geom_text
+#' @importFrom stats reorder
+#' @importFrom Seurat FetchData
+#' @importFrom scales hue_pal
+#' @importFrom rlang .data
+#'
+#' @examples
+#' \dontrun{
+#'   library(Seurat)
+#'   library(ggplot2)
+#'
+#'   # --- Create Mock Data ---
+#'   set.seed(123)
+#'   n_cells <- 300
+#'   sce <- CreateSeuratObject(counts = matrix(rnorm(n_cells * 10), ncol = n_cells))
+#'   sce$Group <- sample(c("Control", "Treat_A", "Treat_B"), n_cells, replace = TRUE)
+#'   sce$CellType <- sample(c("T_cells", "B_cells", "Myeloid", "NK", "Fibro"), n_cells, replace = TRUE)
+#'   sce$CellType[sce$Group == "Treat_A" & runif(n_cells) > 0.6] <- "Myeloid"
+#'
+#'   # --- Run Function ---
+#'   p <- scVisCellFC(
+#'     sce = sce,
+#'     group_col = "Group",
+#'     celltype_col = "CellType",
+#'     comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control"))
+#'   )
+#'   print(p)
+#' }
+scVisCellFC <- function(sce,
+                         group_col,
+                         celltype_col,
+                         comparisons,
+                         palette = c("#00F672","#C8A4F9","#E64B35","#FF00DB","#4DBBD5", "#00A087", "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148"),
+                         labels = TRUE,
+                         label_size = 3.5,
+                         base_size = 14) {
+
+  # 1. Input Validation
+  if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
+
+  meta <- tryCatch({
+    Seurat::FetchData(sce, vars = c(group_col, celltype_col))
+  }, error = function(e) {
+    stop(paste0("❌ Columns not found: '", group_col, "' or '", celltype_col, "'. Please check meta.data."))
+  })
+  colnames(meta) <- c("group", "celltype")
+  meta$celltype <- as.character(meta$celltype)
+
+  # 2. Calculate Proportions
+  # Note: .data$col is CORRECT for data-masking verbs (mutate, group_by)
+  props <- meta |>
+    dplyr::group_by(.data$group, .data$celltype) |>
+    dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
+    dplyr::group_by(.data$group) |>
+    dplyr::mutate(freq = .data$n / sum(.data$n)) |>
+    dplyr::ungroup() |>
+    tidyr::complete(.data$group, .data$celltype, fill = list(n = 0, freq = 0))
+
+  # 3. Calculate Log2FC Loop
+  res_list <- list()
+
+  for (pair in comparisons) {
+    g1 <- pair[1] # Case
+    g2 <- pair[2] # Control
+
+    if (!all(c(g1, g2) %in% unique(meta$group))) {
+      warning(paste0("⚠️ Groups '", g1, "' or '", g2, "' not found. Skipping."))
+      next
+    }
+
+    # Fix Warning: Use strings for tidyselect (select, rename)
+    # .data$col is deprecated in select()
+    d1 <- props |>
+      dplyr::filter(.data$group == g1) |>
+      dplyr::select("celltype", "freq") |>
+      dplyr::rename(v1 = "freq")
+
+    d2 <- props |>
+      dplyr::filter(.data$group == g2) |>
+      dplyr::select("celltype", "freq") |>
+      dplyr::rename(v2 = "freq")
+
+    merged <- dplyr::full_join(d1, d2, by = "celltype") |>
+      dplyr::mutate(
+        v1_adj = .data$v1 + 1e-4,
+        v2_adj = .data$v2 + 1e-4,
+        log2fc = log2(.data$v1_adj / .data$v2_adj),
+        comp_name = paste0(g1, " vs. ", g2)
+      )
+
+    res_list[[paste(g1, g2)]] <- merged
+  }
+
+  if (length(res_list) == 0) stop("❌ No valid comparisons generated.")
+  plot_data <- dplyr::bind_rows(res_list)
+
+  # 4. Color Palette
+  unique_cells <- sort(unique(plot_data$celltype))
+  n_colors <- length(unique_cells)
+
+  if (is.null(palette)) {
+    my_colors <- scales::hue_pal()(n_colors)
+  } else if (is.null(names(palette))) {
+    if (length(palette) < n_colors) palette <- rep(palette, length.out = n_colors)
+    my_colors <- palette[1:n_colors]
+  } else {
+    my_colors <- palette
+  }
+  names(my_colors) <- unique_cells
+
+  # 5. Plotting with Coordinated Fonts
+  # Using theme_classic(base_size) ensures axis text scales proportionally
+  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = stats::reorder(.data$celltype, -.data$log2fc),
+                                               y = .data$log2fc,
+                                               fill = .data$celltype)) +
+    ggplot2::geom_col(color = "black", width = 0.7, linewidth = 0.3) +
+    ggplot2::geom_hline(yintercept = 0, linewidth = 0.5) +
+    ggplot2::facet_wrap(~comp_name, scales = "free", ncol = 2) +
+    ggplot2::scale_fill_manual(values = my_colors) +
+    ggplot2::theme_classic(base_size = base_size) + # Increase base font size
+    ggplot2::labs(y = "Log2 Fold Change", x = NULL) + # Simplified Y-axis
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank(),
+      strip.background = ggplot2::element_blank(),
+      strip.text = ggplot2::element_text(size = base_size * 1.1, face = "bold"), # Coordinated strip text
+      legend.position = "right",
+      panel.grid.major.y = ggplot2::element_line(color = "grey90", linetype = "dashed")
+    )
+
+  # 6. Label Handling
+  if (labels) {
+    max_val <- max(abs(plot_data$log2fc), na.rm = TRUE)
+    offset <- max_val * 0.05
+
+    p <- p + ggplot2::geom_text(
+      ggplot2::aes(label = .data$celltype,
+                   y = ifelse(.data$log2fc > 0, .data$log2fc + offset, .data$log2fc - offset),
+                   vjust = ifelse(.data$log2fc > 0, 0, 1)),
+      size = label_size
+    ) + ggplot2::theme(legend.position = "none")
+  }
+
+  return(p)
+}
+
+
+# =============== scVisDimSplit ================
+# =============== 7.scVisDimSplit (Dimension Reduction Version) ================
+#' @title scVis: Split Dimension Reduction Plot (Smart Labels & Global Contour)
+#' @description A comprehensive Dimension Reduction (DimPlot) visualizer matching high-impact paper styles.
+#' Features: Global dashed contour (Ghost), Filtered highlights, Smart label repulsion (ggrepel).
+#' Applicable to UMAP, t-SNE, or PCA coordinates.
+#' Defaults to showing sample size (n=xxx) at the TOP to avoid overlap.
+#'
+#' @param sce A Seurat object.
+#' @param group_col String. Grouping column (e.g., "group").
+#' @param celltype_col String. Cell type column (coloring/labeling).
+#' @param groups Vector. Specific groups to plot.
+#' @param sub_celltypes Vector. Specific cell types to highlight.
+#' @param reduction String. Reduction to use (e.g., "umap", "tsne", "pca"). Default "umap".
+#' @param palette Vector. Custom colors.
+#' @param pt_size Numeric. Point size. Default 0.1.
+#' @param global_contour Logical. Show dashed outline of ALL cells? Default TRUE.
+#' @param contour_color String. Contour color. Default "grey70".
+#' @param contour_bins Numeric. Contour density. Default 5.
+#' @param label_cells Logical. Label cell types? Default TRUE.
+#' @param use_repel Logical. Use ggrepel to avoid label overlap? Default TRUE.
+#' @param label_size Numeric. Label font size.
+#' @param n_pos String. Position of 'n=xxx'. Defaults to "top". Options: "top", "bottom".
+#' @param n_shift_y Numeric. Manual vertical offset for 'n' label. Default 0.
+#' @param base_size Numeric. Base theme size.
+#' @param xlims,ylims Vector. Fixed axis limits.
+#' @param ncol Numeric. Grid columns.
+#'
+#' @return A cowplot grid object.
+#' @export
+#'
+#' @importFrom Seurat Embeddings FetchData
+#' @importFrom dplyr group_by summarise filter n mutate
+#' @importFrom ggplot2 ggplot aes geom_point geom_text theme_void theme element_rect element_text annotate ggtitle coord_cartesian margin scale_color_manual stat_density_2d after_stat
+#' @importFrom cowplot plot_grid
+#' @importFrom scales hue_pal comma
+#' @importFrom stats median
+#' @importFrom rlang .data
+#' @importFrom ggrepel geom_text_repel
+#'
+#' @examples
+#' \dontrun{
+#'   # Works for UMAP
+#'   scVisDimSplit(sce, "group", "celltype", reduction = "umap")
+#'
+#'   # Works for t-SNE
+#'   scVisDimSplit(sce, "group", "celltype", reduction = "tsne")
+#' }
+scVisDimSplit <- function(sce,
+                          group_col,
+                          celltype_col,
+                          groups = NULL,
+                          sub_celltypes = NULL,
+                          reduction = "umap", # 通用参数
+                          palette = NULL,
+                          pt_size = 0.1,
+                          global_contour = TRUE,
+                          contour_color = "grey70",
+                          contour_bins = 5,
+                          label_cells = TRUE,
+                          use_repel = TRUE,
+                          label_size = 4,
+                          n_pos = "top",
+                          n_shift_y = 0,
+                          base_size = 14,
+                          xlims = c(-15, 15),
+                          ylims = c(-15, 15),
+                          ncol = NULL) {
+
+  # 1. Validation & Data Prep
+  if (!inherits(sce, "Seurat")) stop("Input must be a Seurat object.")
+  if (!reduction %in% names(sce@reductions)) stop(paste0("Reduction '", reduction, "' not found."))
+
+  # Extract Global Data for Contour (Generic Dim Reduction)
+  coords <- as.data.frame(Seurat::Embeddings(sce, reduction = reduction))[, 1:2]
+  colnames(coords) <- c("dim_1", "dim_2")
+
+  meta_cols <- c(celltype_col, group_col)
+  meta <- tryCatch({
+    Seurat::FetchData(sce, vars = meta_cols)
+  }, error = function(e) stop(paste0("Columns not found: ", paste(meta_cols, collapse=", "))))
+
+  global_data <- cbind(coords, meta)
+  global_data$celltype_internal <- as.character(global_data[[celltype_col]])
+  global_data$group_internal <- as.character(global_data[[group_col]])
+
+  # Filter Data for Dots
+  plot_data <- global_data
+  if (!is.null(sub_celltypes)) {
+    plot_data <- plot_data |> dplyr::filter(.data$celltype_internal %in% sub_celltypes)
+    if (nrow(plot_data) == 0) stop("No cells remaining after filtering.")
+  }
+
+  target_groups <- if (is.null(groups)) sort(unique(plot_data$group_internal)) else groups
+
+  # Color Logic
+  unique_cells <- sort(unique(plot_data$celltype_internal))
+  plot_data$celltype_internal <- factor(plot_data$celltype_internal, levels = unique_cells)
+  n_types <- length(unique_cells)
+
+  if (is.null(palette)) {
+    default_pal <- c("#fb8072", "#8dd3c7", "#ffffb3", "#bebada", "#80b1d3", "#fdb462",
+                     "#b3de69", "#fccde5", "#d9d9d9", "#bc80bd", "#ccebc5", "#ffed6f")
+    my_colors <- if (n_types > length(default_pal)) scales::hue_pal()(n_types) else default_pal[1:n_types]
+  } else {
+    my_colors <- if (is.null(names(palette))) rep(palette, length.out = n_types) else palette
+  }
+  if (is.null(names(my_colors))) names(my_colors) <- unique_cells
+
+  # 2. Plotting Loop
+  plot_list <- list()
+
+  # Calculate N Label Position
+  if (n_pos == "top") {
+    n_label_y_base <- ylims[1] + (diff(ylims) * 0.92)
+  } else {
+    n_label_y_base <- ylims[1] + (diff(ylims) * 0.08)
+  }
+  n_label_y <- n_label_y_base + n_shift_y
+
+  for (grp in target_groups) {
+    if (!grp %in% unique(plot_data$group_internal)) next
+
+    sub_data <- plot_data |> dplyr::filter(.data$group_internal == grp)
+    n_text <- paste0("n = ", scales::comma(nrow(sub_data)))
+
+    # Centroids
+    centroids <- NULL
+    if (label_cells) {
+      centroids <- sub_data |> dplyr::group_by(.data$celltype_internal) |>
+        dplyr::summarise(x = stats::median(.data$dim_1), y = stats::median(.data$dim_2), .groups = "drop")
+    }
+
+    # Base Plot
+    p <- ggplot2::ggplot()
+
+    # Layer 1: Global Contour (The "Map")
+    if (global_contour) {
+      p <- p + ggplot2::stat_density_2d(
+        data = global_data,
+        ggplot2::aes(x = .data$dim_1, y = .data$dim_2),
+        color = contour_color, linetype = "dashed", bins = contour_bins, size = 0.3, show.legend = FALSE
+      )
+    }
+
+    # Layer 2: Highlights (The "Dots")
+    p <- p +
+      ggplot2::geom_point(data = sub_data,
+                          ggplot2::aes(x = .data$dim_1, y = .data$dim_2, color = .data$celltype_internal),
+                          size = pt_size, show.legend = FALSE) +
+      scale_color_manual(values = my_colors) +
+      coord_cartesian(xlim = xlims, ylim = ylims) +
+      theme_void() +
+      theme(
+        plot.title = element_text(hjust = 0.5, size = base_size, face = "plain", margin = margin(b = 5)),
+        panel.border = element_rect(colour = "grey60", fill = NA, linetype = "dashed", linewidth = 0.8),
+        legend.position = "none"
+      ) +
+      ggtitle(grp) +
+      # Annotation
+      annotate("text", x = mean(xlims), y = n_label_y, label = n_text,
+               size = base_size * 0.3, fontface = "italic")
+
+    # Layer 3: Smart Labels
+    if (label_cells && !is.null(centroids)) {
+      if (use_repel) {
+        if (requireNamespace("ggrepel", quietly = TRUE)) {
+          p <- p + ggrepel::geom_text_repel(
+            data = centroids,
+            ggplot2::aes(x = .data$x, y = .data$y, label = .data$celltype_internal),
+            color = "black",
+            size = label_size,
+            fontface = "bold",
+            bg.color = "white",
+            bg.r = 0.15,
+            seed = 42,
+            inherit.aes = FALSE
+          )
+        } else {
+          warning("ggrepel not found. Using standard text.")
+          p <- p + geom_text(data = centroids, aes(x=x, y=y, label=celltype_internal),
+                             color="black", size=label_size, fontface="bold")
+        }
+      } else {
+        p <- p + geom_text(data = centroids, aes(x=x, y=y, label=celltype_internal),
+                           color="black", size=label_size, fontface="bold")
+      }
+    }
+    plot_list[[grp]] <- p
+  }
+
+  if (length(plot_list) == 0) stop("❌ No plots generated.")
+
+  final_col <- if (is.null(ncol)) ceiling(sqrt(length(plot_list))) else ncol
+  return(cowplot::plot_grid(plotlist = plot_list, nrow = NULL, ncol = final_col))
+}

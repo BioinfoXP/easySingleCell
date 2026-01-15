@@ -10,7 +10,7 @@ AutoCellType(
   cellname = NULL,
   background = "",
   annotation_level = "major",
-  model = "gpt-4o",
+  model = "gpt-5-nano",
   topgenenumber = 20,
   base_url = "https://api.gpt.ge/v1",
   api_key = NULL,
@@ -29,7 +29,7 @@ AutoCellType(
 
 \item{annotation_level}{Character. "major" (lineage) or "subtype" (functional state).}
 
-\item{model}{Character. Model name (default: "gpt-4o").}
+\item{model}{Character. Model name (default: "gpt-5-nano").}
 
 \item{topgenenumber}{Integer. Top N markers per cluster (default: 20).}
 

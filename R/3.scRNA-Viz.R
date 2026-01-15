@@ -977,3 +977,399 @@ scVisDimSplit <- function(sce,
   final_col <- if (is.null(ncol)) ceiling(sqrt(length(plot_list))) else ncol
   return(cowplot::plot_grid(plotlist = plot_list, nrow = NULL, ncol = final_col))
 }
+
+
+
+# =============== scVisCellRatio ================
+# =============== 8.scVisCellRatio ================
+#' @title scVis: Cell Ratio Alluvial Plot
+#' @description Visualizes cell type proportion dynamics across groups using an alluvial (Sankey-like) plot.
+#' Features a vibrant, high-contrast 15-color palette and adjustable layout options.
+#' Uses base R pipe (R >= 4.1.0).
+#'
+#' @param sce A Seurat object.
+#' @param group_col String. Column name in \code{meta.data} for X-axis grouping (e.g., "Condition", "Timepoint").
+#' @param celltype_col String. Column name in \code{meta.data} for cell types (used for stacking and coloring).
+#' @param group_order Vector. Explicit order for the X-axis groups. Crucial for determining the flow direction.
+#' @param palette Vector. Custom colors. If NULL, uses the extended 15-color vibrant palette.
+#' @param legend_position String. Position of the legend ("right", "bottom", "top", "left", "none"). Default "right".
+#' @param alpha_flow Numeric. Transparency of the connecting flow bands (0-1). Default 0.5.
+#' @param bar_width Numeric. Width of the vertical bars (0-1). Default 0.5.
+#' @param base_size Numeric. Base font size for the theme. Default 14.
+#'
+#' @return A ggplot object.
+#' @export
+#'
+#' @importFrom dplyr group_by summarise mutate ungroup n
+#' @importFrom ggplot2 ggplot aes scale_y_continuous labs scale_fill_manual theme_classic theme element_text element_blank element_line
+#' @importFrom ggalluvial geom_flow geom_stratum
+#' @importFrom Seurat FetchData
+#' @importFrom scales percent hue_pal
+#' @importFrom rlang .data
+#'
+#' @examples
+#' \dontrun{
+#'   library(Seurat)
+#'   library(ggplot2)
+#'
+#'   # --- 1. Generate Mock Data ---
+#'   set.seed(123)
+#'   n_cells <- 1000
+#'   counts <- matrix(rpois(n_cells * 10, lambda = 1), nrow = 10, ncol = n_cells)
+#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
+#'   rownames(counts) <- paste0("Gene_", 1:10)
+#'
+#'   sce <- CreateSeuratObject(counts = counts)
+#'   sce$Stage <- sample(c("NC", "MASH", "HCC-N", "HCC-T"), n_cells, replace = TRUE)
+#'   sce$CellType <- sample(paste0("Cluster_", 1:8), n_cells, replace = TRUE)
+#'
+#'   # --- 2. Run Function ---
+#'   # Example: Legend at the bottom
+#'   p <- scVisCellRatio(
+#'     sce = sce,
+#'     group_col = "Stage",
+#'     celltype_col = "CellType",
+#'     group_order = c("NC", "MASH", "HCC-N", "HCC-T"),
+#'     legend_position = "bottom"  # <--- Change legend position here
+#'   )
+#'
+#'   print(p)
+#' }
+scVisCellRatio <- function(sce,
+                           group_col,
+                           celltype_col,
+                           group_order = NULL,
+                           palette = NULL,
+                           legend_position = "right", # New parameter
+                           alpha_flow = 0.5,
+                           bar_width = 0.5,
+                           base_size = 14) {
+
+  # 1. Input Validation
+  if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
+
+  if (!requireNamespace("ggalluvial", quietly = TRUE)) {
+    stop("Package 'ggalluvial' is required. Please install it: install.packages('ggalluvial')")
+  }
+
+  # Secure Data Extraction
+  meta <- tryCatch({
+    Seurat::FetchData(sce, vars = c(group_col, celltype_col))
+  }, error = function(e) {
+    stop(paste0("❌ Columns not found: '", group_col, "' or '", celltype_col, "'. Please check meta.data."))
+  })
+
+  colnames(meta) <- c("group", "celltype")
+
+  # 2. Data Processing
+  plot_data <- meta |>
+    dplyr::group_by(.data$group, .data$celltype) |>
+    dplyr::summarise(Count = dplyr::n(), .groups = "drop") |>
+    dplyr::group_by(.data$group) |>
+    dplyr::mutate(Frequency = .data$Count / sum(.data$Count)) |>
+    dplyr::ungroup()
+
+  # Handle Group Order
+  if (!is.null(group_order)) {
+    missing <- setdiff(group_order, unique(plot_data$group))
+    if(length(missing) > 0) warning("⚠️ Groups in 'group_order' missing from data.")
+    plot_data$group <- factor(plot_data$group, levels = group_order)
+  }
+
+  # 3. Color Palette Logic (15 Colors)
+  unique_types <- sort(unique(plot_data$celltype))
+  n_types <- length(unique_types)
+
+  if (is.null(palette)) {
+    # Custom Vibrant Palette (15 colors)
+    ref_pal <- c(
+      "#32CD32", "#C77CFF", "#FFA500", "#007AFF", "#FF3333",
+      "#00C19F", "#FF61CC", "#FFD700", "#00FFFF", "#8A2BE2",
+      "#FF4500", "#2E8B57", "#DC143C", "#4169E1", "#8B4513"
+    )
+
+    if (n_types > length(ref_pal)) {
+      warning("⚠️ More cell types than default 15 colors. Extending palette with hue_pal.")
+      my_colors <- scales::hue_pal()(n_types)
+    } else {
+      my_colors <- ref_pal[1:n_types]
+    }
+  } else {
+    if (is.null(names(palette))) {
+      if (length(palette) < n_types) {
+        warning("⚠️ Not enough colors provided. Recycling palette.")
+        palette <- rep(palette, length.out = n_types)
+      }
+      my_colors <- palette[1:n_types]
+    } else {
+      my_colors <- palette
+    }
+  }
+
+  if (is.null(names(my_colors))) names(my_colors) <- unique_types
+
+  # 4. Plotting
+  p <- ggplot2::ggplot(plot_data,
+                       ggplot2::aes(x = .data$group,
+                                    y = .data$Frequency,
+                                    fill = .data$celltype,
+                                    stratum = .data$celltype,
+                                    alluvium = .data$celltype)) +
+
+    # Layer 1: Flow
+    ggalluvial::geom_flow(alpha = alpha_flow, width = bar_width, curve_type = "linear") +
+
+    # Layer 2: Bar
+    ggalluvial::geom_stratum(width = bar_width, color = NA) +
+
+    # Styling
+    ggplot2::scale_y_continuous(expand = c(0, 0), labels = scales::percent) +
+    ggplot2::scale_fill_manual(values = my_colors) +
+    ggplot2::theme_classic(base_size = base_size) +
+    ggplot2::labs(x = NULL, y = "Proportion") +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(color = "black", size = base_size, angle = 45, hjust = 1),
+      axis.text.y = ggplot2::element_text(color = "black", size = base_size),
+      legend.position = legend_position, # <--- Used here
+      legend.title = ggplot2::element_blank(),
+      axis.line = ggplot2::element_line(color = "black", linewidth = 0.5)
+    )
+
+  return(p)
+}
+
+
+
+
+# ========= scVisVlnPlot =========
+# ========= 9. scVisVlnPlot =========
+#' @title scVis: Publication-Ready Violin Plot with Stats
+#' @description A wrapper around \code{Seurat::VlnPlot} that adds statistical comparisons and optimizes layout.
+#' Automatically handles the common "Column not found" error in stats calculation by using the internal 'ident' column.
+#' Uses base R pipe (R >= 4.1.0).
+#'
+#' @param sce A Seurat object.
+#' @param features Vector of feature names (e.g., c("TP53", "CD3D")) to plot.
+#' @param group_col String. Column name to group cells by. If NULL, uses active identity.
+#' @param comparisons List of vectors. Pairs of groups to compare (e.g., \code{list(c("Treat", "Ctrl"))}).
+#' @param palette Vector. Custom colors. If NULL, uses a default vibrant NPG-style palette.
+#' @param pt_size Numeric. Size of the jitter points. Default 0.
+#' @param ncol Numeric. Number of columns for layout. Auto-calculated if NULL.
+#' @param base_size Numeric. Base font size for the plot. Default 14.
+#' @param sign_method String. Statistical test method: "wilcox.test" (default), "t.test", "kruskal.test", or "anova".
+#' @param sign_label String. Label type: "p.signif" (stars) or "p.format" (numbers). Default "p.signif".
+#' @param hide_ns Logical. If TRUE, only displays significant comparisons (p < 0.05). Default TRUE.
+#' @param step_increase Numeric. Spacing between stat brackets. Default 0.1.
+#' @param ... Additional arguments passed to \code{Seurat::VlnPlot}.
+#'
+#' @return A patchwork ggplot object.
+#' @export
+#'
+#' @importFrom Seurat VlnPlot Idents
+#' @importFrom ggplot2 theme_classic theme element_text element_blank labs scale_y_continuous stat_summary expansion
+#' @importFrom ggpubr stat_compare_means compare_means
+#' @importFrom patchwork wrap_plots
+#' @importFrom scales hue_pal
+#' @importFrom stats as.formula
+#' @importFrom dplyr filter
+#' @importFrom rlang .data
+#'
+#' @examples
+#' \dontrun{
+#'   library(Seurat)
+#'   library(ggplot2)
+#'
+#'   # --- 1. Mock Data (Using REAL Gene Names) ---
+#'   set.seed(123)
+#'   n_cells <- 300
+#'   # Simulate 5 genes: TP53, CD3D, MS4A1, GAPDH, EGFR
+#'   genes <- c("TP53", "CD3D", "MS4A1", "GAPDH", "EGFR")
+#'   counts <- matrix(rpois(n_cells * 5, 1), nrow = 5, ncol = n_cells)
+#'   rownames(counts) <- genes
+#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
+#'
+#'   sce <- CreateSeuratObject(counts = counts)
+#'   sce$Group <- sample(c("Ctrl", "Treat"), n_cells, replace = TRUE)
+#'
+#'   # Simulate TP53 upregulation in Treat group
+#'   mat <- GetAssayData(sce, slot = "counts")
+#'   mat["TP53", sce$Group == "Treat"] <- mat["TP53", sce$Group == "Treat"] + 3
+#'   sce <- SetAssayData(sce, slot = "counts", new.data = mat)
+#'
+#'   # --- 2. Plot ---
+#'   p <- scVisVlnPlot(
+#'     sce = sce,
+#'     features = c("TP53", "CD3D"), # Real gene symbols
+#'     group_col = "Group",
+#'     comparisons = list(c("Treat", "Ctrl")),
+#'     sign_label = "p.signif",
+#'     pt_size = 0.1
+#'   )
+#'   print(p)
+#' }
+scVisVlnPlot <- function(sce,
+                         features,
+                         group_col = NULL,
+                         comparisons = NULL,
+                         palette = NULL,
+                         pt_size = 0,
+                         ncol = NULL,
+                         base_size = 14,
+                         sign_method = "wilcox.test",
+                         sign_label = "p.signif",
+                         hide_ns = TRUE,
+                         step_increase = 0.1,
+                         ...) {
+
+  # 1. Dependency & Input Check
+  if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
+  if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' is required.")
+  if (!requireNamespace("patchwork", quietly = TRUE)) stop("Package 'patchwork' is required.")
+
+  # 2. Robust Feature Checking
+  avail_feats <- rownames(sce)
+  avail_meta <- colnames(sce@meta.data)
+  all_avail <- c(avail_feats, avail_meta)
+
+  valid_features <- c()
+  for (ft in features) {
+    if (ft %in% all_avail) {
+      valid_features <- c(valid_features, ft)
+    } else {
+      # Try replacing underscore with dash (common Seurat conversion: e.g. HLA_A -> HLA-A)
+      ft_alt <- gsub("_", "-", ft)
+      if (ft_alt %in% all_avail) {
+        message(paste("ℹ️  Auto-corrected feature:", ft, "->", ft_alt))
+        valid_features <- c(valid_features, ft_alt)
+      } else {
+        warning(paste("⚠️ Feature not found:", ft))
+      }
+    }
+  }
+
+  if (length(valid_features) == 0) {
+    head_feats <- paste(head(avail_feats, 3), collapse = ", ")
+    stop(paste0("❌ No valid features found to plot.\n   Top available features in object: ", head_feats, "..."))
+  }
+
+  if (is.null(group_col)) group_col <- "ident"
+
+  # 3. Color Palette Logic
+  if (group_col == "ident") {
+    n_groups <- length(unique(Seurat::Idents(sce)))
+  } else {
+    if (!group_col %in% colnames(sce@meta.data)) stop(paste("Column", group_col, "not found in meta.data"))
+    n_groups <- length(unique(sce@meta.data[[group_col]]))
+  }
+
+  if (is.null(palette)) {
+    default_pal <- c(
+      "#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F",
+      "#8491B4", "#91D1C2", "#DC0000", "#7E6148", "#B09C85",
+      "#f47c7c", "#aadea7", "#f7f494", "#72ccff", "#c999ff"
+    )
+    if (n_groups > length(default_pal)) {
+      palette <- scales::hue_pal()(n_groups)
+    } else {
+      palette <- default_pal[1:n_groups]
+    }
+  }
+
+  # 4. Generate Base Plots
+  plots <- Seurat::VlnPlot(
+    object = sce,
+    features = valid_features,
+    group.by = group_col,
+    pt.size = pt_size,
+    cols = palette,
+    combine = FALSE,
+    ...
+  )
+
+  # 5. Loop to Customize Each Plot
+  if (is.null(ncol)) ncol <- ceiling(sqrt(length(plots)))
+  show_ylab_indices <- which((seq_along(plots) - 1) %% ncol == 0)
+
+  modified_plots <- lapply(seq_along(plots), function(i) {
+    p <- plots[[i]]
+    gene_name <- p$labels$title
+
+    # --- A. Statistical Analysis Logic ---
+    final_comparisons <- comparisons
+
+    if (!is.null(comparisons) && hide_ns) {
+      plot_df <- p$data
+      # Use backticks for gene name to handle special chars like 'HLA-A' or 'RP11-...'
+      stats_formula <- stats::as.formula(paste0("`", gene_name, "` ~ ident"))
+
+      tryCatch({
+        p_res <- ggpubr::compare_means(
+          formula = stats_formula,
+          data = plot_df,
+          method = sign_method
+        )
+
+        sig_pairs <- p_res |> dplyr::filter(.data$p < 0.05)
+
+        keep_indices <- c()
+        for (k in seq_along(comparisons)) {
+          pair <- comparisons[[k]]
+          is_sig <- any(
+            (sig_pairs$group1 == pair[1] & sig_pairs$group2 == pair[2]) |
+              (sig_pairs$group1 == pair[2] & sig_pairs$group2 == pair[1])
+          )
+          if (is_sig) keep_indices <- c(keep_indices, k)
+        }
+
+        if (length(keep_indices) > 0) {
+          final_comparisons <- comparisons[keep_indices]
+        } else {
+          final_comparisons <- NULL
+        }
+      }, error = function(e) {
+        warning(paste("Stats failed for", gene_name, ":", e$message))
+        final_comparisons <- NULL
+      })
+    }
+
+    # --- B. Aesthetic Customization ---
+    y_lab_text <- if (i %in% show_ylab_indices) "Expression Level" else NULL
+
+    p <- p +
+      ggplot2::stat_summary(fun.data = "mean_sdl", fun.args = list(mult = 1),
+                            geom = "pointrange", color = "black", size = 0.4,
+                            shape = 21, fill = "white", stroke = 0.5) +
+      ggplot2::theme_classic() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold.italic", size = base_size + 2),
+        axis.title.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_text(size = base_size),
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black", size = base_size - 2),
+        axis.text.y = ggplot2::element_text(color = "black", size = base_size - 2),
+        legend.position = "none"
+      ) +
+      ggplot2::labs(y = y_lab_text, title = gene_name)
+
+    # --- C. Add Stats Layer ---
+    if (!is.null(final_comparisons)) {
+      top_expansion <- 0.1 + (length(final_comparisons) * 0.08)
+
+      p <- p +
+        ggpubr::stat_compare_means(
+          comparisons = final_comparisons,
+          method = sign_method,
+          label = sign_label,
+          step.increase = step_increase,
+          color = "black",
+          size = 3.5,
+          vjust = 0.5,
+          symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
+                             symbols = c("****", "***", "**", "*", "ns"))
+        ) +
+        ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, top_expansion)))
+    }
+    return(p)
+  })
+
+  patchwork::wrap_plots(modified_plots, ncol = ncol)
+}

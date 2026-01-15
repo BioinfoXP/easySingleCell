@@ -405,106 +405,194 @@ scVisDotPlot <- function(object,
   return(p)
 }
 
-
-# =============== CellRatioPlot  ================
-# =============== 4.scVisCellRatioPlot  ================
-#' @title Visualize Cell Type Proportion Differences (Fixed Stats)
-#' @description Calculates cell type proportions and performs statistical comparisons.
-#' Fixed the "missing value" error by correctly handling grouped statistical testing.
+# =============== scVisRatioBox  ================
+# =============== 4.scVisRatioBox  ================
+#' @title scVis: Cell Proportion Boxplot with Stats
+#' @description Calculates cell type proportions per sample and performs statistical comparisons between groups using Boxplots.
+#' Automatically handles missing cell types (fills 0) and maps samples back to their groups correctly.
+#' Uses base R pipe (R >= 4.1.0).
 #'
 #' @param sce A Seurat object.
-#' @param group.by Column name for conditions (e.g., "Treatment").
-#' @param cell.type Column name for cell types.
-#' @param sample.by Column name for samples.
-#' @param test.method Default "wilcox.test".
-#' @param label.type Default "p.signif" (*).
-#' @param cols Colors.
-#' @param pt.size Point size.
-#' @param width Box width.
+#' @param group_col String. Column name for conditions (e.g., "Treatment").
+#' @param celltype_col String. Column name for cell types.
+#' @param sample_col String. Column name for biological samples (e.g., "orig.ident").
+#' @param comparisons List of vectors. Pairs to compare (e.g., \code{list(c("A", "B"))}). If NULL, performs global test.
+#' @param sign_method String. Test method: "wilcox.test" (default), "t.test", "kruskal.test", or "anova".
+#' @param sign_label String. Label type: "p.signif" (*) or "p.format" (numbers).
+#' @param palette Vector. Custom colors. If NULL, uses default vibrant palette.
+#' @param pt_size Numeric. Size of jitter points. Default 1.5.
+#' @param box_width Numeric. Width of boxplots. Default 0.6.
+#' @param base_size Numeric. Base font size. Default 14.
 #'
+#' @return A ggplot object.
 #' @export
-scVisCellRatioPlot <- function(sce,
-                               group.by,
-                               cell.type = "celltype",
-                               sample.by = "orig.ident",
-                               test.method = "wilcox.test",
-                               label.type = "p.signif",
-                               cols = NULL,
-                               pt.size = 1.5,
-                               width = 0.6,
-                               ...) {
+#'
+#' @importFrom Seurat FetchData
+#' @importFrom dplyr group_by summarise mutate ungroup n select distinct left_join
+#' @importFrom tidyr complete
+#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter scale_fill_manual scale_color_manual scale_y_continuous labs theme_classic theme element_text element_line position_dodge position_jitterdodge
+#' @importFrom ggpubr stat_compare_means
+#' @importFrom scales percent hue_pal
+#' @importFrom rlang .data
+#'
+#' @examples
+#' \dontrun{
+#'   library(Seurat)
+#'   library(ggplot2)
+#'
+#'   # --- 1. Mock Data ---
+#'   set.seed(123)
+#'   n_cells <- 1000
+#'   counts <- matrix(rpois(n_cells * 10, 1), nrow = 10, ncol = n_cells)
+#'   rownames(counts) <- paste0("Gene_", 1:10)
+#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
+#'   sce <- CreateSeuratObject(counts = counts)
+#'
+#'   # Simulate Metadata
+#'   sce$Group <- sample(c("Ctrl", "Treat"), n_cells, replace = TRUE)
+#'   sce$Sample <- paste0(sce$Group, "_Rep", sample(1:3, n_cells, replace = TRUE))
+#'   sce$CellType <- sample(c("T_cell", "B_cell", "Macro"), n_cells, replace = TRUE)
+#'
+#'   # --- 2. Plot ---
+#'   p <- scVisRatioBox(
+#'     sce = sce,
+#'     group_col = "Group",
+#'     celltype_col = "CellType",
+#'     sample_col = "Sample",
+#'     comparisons = list(c("Treat", "Ctrl")), # Pairwise comparison
+#'     sign_label = "p.signif"
+#'   )
+#'   print(p)
+#' }
+scVisRatioBox <- function(sce,
+                          group_col,
+                          celltype_col,
+                          sample_col,
+                          comparisons = NULL,
+                          sign_method = "wilcox.test",
+                          sign_label = "p.signif",
+                          palette = NULL,
+                          pt_size = 1.5,
+                          box_width = 0.6,
+                          base_size = 14) {
 
-  # 1. Check input
-  if (!all(c(group.by, cell.type, sample.by) %in% colnames(sce@meta.data))) {
-    stop("Column not found in meta.data")
+  # 1. Input Validation
+  if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
+  if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' is required.")
+
+  # Check columns
+  req_cols <- c(group_col, celltype_col, sample_col)
+  if (!all(req_cols %in% colnames(sce@meta.data))) {
+    missing <- req_cols[!req_cols %in% colnames(sce@meta.data)]
+    stop(paste("❌ Columns not found in meta.data:", paste(missing, collapse = ", ")))
   }
 
-  # 2. Calculate Proportions
-  message("Calculating cell proportions per sample...")
-  meta_df <- Seurat::FetchData(sce, vars = c(group.by, cell.type, sample.by))
+  # 2. Data Preparation
+  # Extract raw data
+  meta_df <- Seurat::FetchData(sce, vars = c(group_col, celltype_col, sample_col))
   colnames(meta_df) <- c("Group", "CellType", "Sample")
 
+  # Create a lookup table for Sample -> Group mapping
+  # This is SAFER than na.omit() after complete(), which can lose group info
+  sample_info <- meta_df |>
+    dplyr::select("Sample", "Group") |>
+    dplyr::distinct()
+
+  # Calculate Proportions
   ratio_data <- meta_df |>
-    dplyr::group_by(Sample, Group, CellType) |>
+    dplyr::group_by(.data$Sample, .data$CellType) |>
     dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
-    tidyr::complete(Sample, CellType, fill = list(n = 0)) |>
-    dplyr::group_by(Sample) |>
-    dplyr::mutate(Group = unique(stats::na.omit(Group))) |>
-    dplyr::ungroup() |>
-    dplyr::group_by(Sample) |>
-    dplyr::mutate(Ratio = n / sum(n)) |>
+    # Fill missing combinations with 0 counts
+    tidyr::complete(.data$Sample, .data$CellType, fill = list(n = 0)) |>
+    # Re-attach Group information
+    dplyr::left_join(sample_info, by = "Sample") |>
+    # Calculate Ratio
+    dplyr::group_by(.data$Sample) |>
+    dplyr::mutate(Ratio = .data$n / sum(.data$n)) |>
     dplyr::ungroup()
 
-  # 3. Colors
-  if (is.null(cols)) {
-    n_groups <- length(unique(ratio_data$Group))
-    if (n_groups <= 10) {
-      cols <- c("#E64B35FF", "#4DBBD5FF", "#00A087FF", "#3C5488FF", "#F39B7FFF")
+  # 3. Color Palette Logic (Standard 15 colors)
+  n_groups <- length(unique(ratio_data$Group))
+
+  if (is.null(palette)) {
+    default_pal <- c(
+      "#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F",
+      "#8491B4", "#91D1C2", "#DC0000", "#7E6148", "#B09C85",
+      "#f47c7c", "#aadea7", "#f7f494", "#72ccff", "#c999ff"
+    )
+    if (n_groups > length(default_pal)) {
+      palette <- scales::hue_pal()(n_groups)
     } else {
-      cols <- scales::hue_pal()(n_groups)
+      palette <- default_pal[1:n_groups]
     }
+  } else {
+    # Handle user palette recycling
+    if (length(palette) < n_groups) palette <- rep(palette, length.out = n_groups)
   }
 
   # 4. Plotting
-  p <- ggplot2::ggplot(ratio_data, ggplot2::aes(x = CellType, y = Ratio, fill = Group)) +
-    ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.8, width = width,
-                          position = ggplot2::position_dodge(width = 0.8)) +
-    ggplot2::geom_jitter(ggplot2::aes(color = Group),
-                         position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
-                         size = pt.size, alpha = 0.8, show.legend = FALSE) +
+  p <- ggplot2::ggplot(ratio_data, ggplot2::aes(x = .data$CellType, y = .data$Ratio, fill = .data$Group)) +
 
-    ggplot2::scale_fill_manual(values = cols) +
-    ggplot2::scale_color_manual(values = cols) +
+    # Boxplot
+    ggplot2::geom_boxplot(
+      outlier.shape = NA,
+      alpha = 0.8,
+      width = box_width,
+      position = ggplot2::position_dodge(width = 0.8)
+    ) +
+
+    # Jitter Points
+    ggplot2::geom_jitter(
+      ggplot2::aes(color = .data$Group),
+      position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+      size = pt_size,
+      alpha = 0.8,
+      show.legend = FALSE
+    ) +
+
+    # Aesthetics
+    ggplot2::scale_fill_manual(values = palette) +
+    ggplot2::scale_color_manual(values = palette) +
     ggplot2::scale_y_continuous(labels = scales::percent) +
-    ggpubr::theme_pubr() +
-    ggplot2::labs(x = "", y = "Cell Proportion", fill = group.by) +
+    ggplot2::theme_classic(base_size = base_size) +
+    ggplot2::labs(x = NULL, y = "Cell Proportion", fill = group_col) +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black"),
       axis.text.y = ggplot2::element_text(color = "black"),
       legend.position = "top",
-      panel.grid.major.y = ggplot2::element_line(color = "grey90", linetype = "dashed"),
-      ...
+      panel.grid.major.y = ggplot2::element_line(color = "grey90", linetype = "dashed")
     )
 
   # 5. Statistical Tests
-  # 在分组箱线图中，不要传递 comparisons 参数，直接让 ggpubr 识别 group
   tryCatch({
-    p <- p + ggpubr::stat_compare_means(
-      aes(group = Group), # 显式告诉 ggplot 按 Group 分组进行比较
-      method = test.method,
-      label = label.type,
-      hide.ns = TRUE,    # 是否隐藏无意义的结果
-      symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
-                         symbols = c("****", "***", "**", "*", "ns"))
-    )
+    if (is.null(comparisons)) {
+      # Global Test (e.g., ANOVA/Kruskal if >2 groups, or basic comparison)
+      p <- p + ggpubr::stat_compare_means(
+        ggplot2::aes(group = .data$Group),
+        method = sign_method,
+        label = sign_label,
+        hide.ns = TRUE,
+        label.y.npc = "top" # Auto position at top
+      )
+    } else {
+      # Pairwise Comparisons (Specified by user)
+      p <- p + ggpubr::stat_compare_means(
+        mapping = ggplot2::aes(group = .data$Group),
+        comparisons = comparisons,
+        method = sign_method,
+        label = sign_label,
+        hide.ns = TRUE,
+        symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
+                           symbols = c("****", "***", "**", "*", "ns"))
+      )
+    }
   }, error = function(e) {
-    message("Statistical annotation failed. Returning plot without stats.")
-    print(e)
+    message("⚠️ Statistical annotation failed. Returning plot without stats.")
+    message(e$message)
   })
 
   return(p)
 }
-
 
 
 # =============== Ro/e 分布偏好  ================

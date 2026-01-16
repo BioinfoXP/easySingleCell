@@ -706,23 +706,27 @@ scVisRoePlot <- function(sce,
 # =============== 6.scVisCellFC  ================
 #' @title scVis: Cell Type Log2FC Plot
 #' @description Calculates and visualizes the Log2 Fold Change of cell type proportions between groups.
+#' Features flexible controls for labels, legends, and layout. Optimized for publication-quality figures.
 #' Uses base R pipe (R >= 4.1.0).
 #'
 #' @param sce A Seurat object.
-#' @param group_col String. Column name in \code{meta.data} for grouping (e.g., "group", "condition").
-#' @param celltype_col String. Column name in \code{meta.data} for cell types (e.g., "cell_type", "cluster").
-#' @param comparisons A list of character vectors. Each vector must contain two group names: c("Case", "Control").
-#' @param palette Vector. Custom colors. Defaults to NPG style.
-#' @param labels Logical. Whether to show cell type labels on bars. Default TRUE.
-#' @param label_size Numeric. Font size for labels on bars. Default 3.5.
-#' @param base_size Numeric. Base font size for the plot theme. Default 12.
+#' @param group_col String. Column name in \code{meta.data} for grouping (e.g., "group").
+#' @param celltype_col String. Column name in \code{meta.data} for cell types (e.g., "cell_type").
+#' @param comparisons A list of vectors (e.g., \code{list(c("Case", "Ctrl"))}) OR a single vector (e.g., \code{c("Case", "Ctrl")}).
+#' @param palette Vector. Custom colors. Defaults to a vibrant 12-color palette.
+#' @param show_labels Logical. Whether to show text labels on bars. Default TRUE.
+#' @param show_legend Logical. Whether to show the legend. Default FALSE.
+#' @param legend_position String. Position of legend ("right", "top", "bottom", "left"). Default "right".
+#' @param label_size Numeric. Font size for labels. Default 4.
+#' @param base_size Numeric. Base font size for the plot theme. Default 14.
+#' @param bar_width Numeric. Width of the bars (0-1). Default 0.7.
 #'
 #' @return A ggplot object.
 #' @export
 #'
 #' @importFrom dplyr group_by summarise mutate ungroup select filter rename full_join bind_rows
 #' @importFrom tidyr complete
-#' @importFrom ggplot2 ggplot aes geom_col geom_hline facet_wrap scale_fill_manual theme_classic labs theme element_blank element_text element_line geom_text
+#' @importFrom ggplot2 ggplot aes geom_col geom_hline facet_wrap scale_fill_manual theme_classic labs theme element_blank element_text element_line geom_text scale_y_continuous expansion
 #' @importFrom stats reorder
 #' @importFrom Seurat FetchData
 #' @importFrom scales hue_pal
@@ -733,35 +737,68 @@ scVisRoePlot <- function(sce,
 #'   library(Seurat)
 #'   library(ggplot2)
 #'
-#'   # --- Create Mock Data ---
+#'   # --- 1. Create Mock Data ---
 #'   set.seed(123)
 #'   n_cells <- 300
-#'   sce <- CreateSeuratObject(counts = matrix(rnorm(n_cells * 10), ncol = n_cells))
+#'   counts <- matrix(rnorm(n_cells * 10), ncol = n_cells)
+#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
+#'   rownames(counts) <- paste0("Gene_", 1:10)
+#'
+#'   sce <- CreateSeuratObject(counts = counts)
 #'   sce$Group <- sample(c("Control", "Treat_A", "Treat_B"), n_cells, replace = TRUE)
 #'   sce$CellType <- sample(c("T_cells", "B_cells", "Myeloid", "NK", "Fibro"), n_cells, replace = TRUE)
+#'
+#'   # Simulate enrichment of Myeloid in Treat_A
 #'   sce$CellType[sce$Group == "Treat_A" & runif(n_cells) > 0.6] <- "Myeloid"
 #'
-#'   # --- Run Function ---
-#'   p <- scVisCellFC(
+#'   # --- 2. Basic Usage (Vector Input) ---
+#'   p1 <- scVisCellFC(
 #'     sce = sce,
 #'     group_col = "Group",
 #'     celltype_col = "CellType",
-#'     comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control"))
+#'     comparisons = c("Treat_A", "Control"), # Smart vector handling
+#'     show_labels = TRUE,
+#'     show_legend = FALSE
 #'   )
-#'   print(p)
+#'   print(p1)
+#'
+#'   # --- 3. Advanced Usage (List Input + Legend Customization) ---
+#'   p2 <- scVisCellFC(
+#'     sce = sce,
+#'     group_col = "Group",
+#'     celltype_col = "CellType",
+#'     comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control")),
+#'     show_labels = FALSE,        # Turn off text labels
+#'     show_legend = TRUE,         # Turn on legend
+#'     legend_position = "bottom", # Move legend to bottom
+#'     base_size = 16
+#'   )
+#'   print(p2)
 #' }
 scVisCellFC <- function(sce,
-                         group_col,
-                         celltype_col,
-                         comparisons,
-                         palette = c("#00F672","#C8A4F9","#E64B35","#FF00DB","#4DBBD5", "#00A087", "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148"),
-                         labels = TRUE,
-                         label_size = 3.5,
-                         base_size = 14) {
+                        group_col,
+                        celltype_col,
+                        comparisons,
+                        palette = c("#00F672","#C8A4F9","#E64B35","#FF00DB","#4DBBD5", "#00A087", "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148"),
+                        show_labels = TRUE,
+                        show_legend = FALSE,
+                        legend_position = "right",
+                        label_size = 4,
+                        base_size = 14,
+                        bar_width = 0.7) {
 
   # 1. Input Validation
   if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
 
+  # Smart Comparison Handling (Vector -> List)
+  if (is.atomic(comparisons) && !is.list(comparisons)) {
+    if (length(comparisons) != 2) {
+      stop("For a single comparison, provide a vector of length 2: c('Case', 'Control').")
+    }
+    comparisons <- list(comparisons)
+  }
+
+  # Secure Data Fetching
   meta <- tryCatch({
     Seurat::FetchData(sce, vars = c(group_col, celltype_col))
   }, error = function(e) {
@@ -771,7 +808,6 @@ scVisCellFC <- function(sce,
   meta$celltype <- as.character(meta$celltype)
 
   # 2. Calculate Proportions
-  # Note: .data$col is CORRECT for data-masking verbs (mutate, group_by)
   props <- meta |>
     dplyr::group_by(.data$group, .data$celltype) |>
     dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
@@ -792,8 +828,6 @@ scVisCellFC <- function(sce,
       next
     }
 
-    # Fix Warning: Use strings for tidyselect (select, rename)
-    # .data$col is deprecated in select()
     d1 <- props |>
       dplyr::filter(.data$group == g1) |>
       dplyr::select("celltype", "freq") |>
@@ -832,37 +866,66 @@ scVisCellFC <- function(sce,
   }
   names(my_colors) <- unique_cells
 
-  # 5. Plotting with Coordinated Fonts
-  # Using theme_classic(base_size) ensures axis text scales proportionally
+  # Determine final legend position
+  final_legend_pos <- if (show_legend) legend_position else "none"
+
+  # 5. Plotting
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = stats::reorder(.data$celltype, -.data$log2fc),
                                                y = .data$log2fc,
                                                fill = .data$celltype)) +
-    ggplot2::geom_col(color = "black", width = 0.7, linewidth = 0.3) +
-    ggplot2::geom_hline(yintercept = 0, linewidth = 0.5) +
+
+    # Zero line (Behind bars)
+    ggplot2::geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
+
+    # Bars
+    ggplot2::geom_col(color = "black", width = bar_width, linewidth = 0.4) +
+
+    # Faceting
     ggplot2::facet_wrap(~comp_name, scales = "free", ncol = 2) +
+
+    # Colors
     ggplot2::scale_fill_manual(values = my_colors) +
-    ggplot2::theme_classic(base_size = base_size) + # Increase base font size
-    ggplot2::labs(y = "Log2 Fold Change", x = NULL) + # Simplified Y-axis
+
+    # Axis expansion (Give room for labels)
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = 0.15)) +
+
+    # Visual Theme
+    ggplot2::theme_classic(base_size = base_size) +
+    ggplot2::labs(y = "Log2 Fold Change", x = NULL) +
+
     ggplot2::theme(
-      axis.text.x = ggplot2::element_blank(),
+      # Clean X Axis (Remove line and text)
+      axis.line.x = ggplot2::element_blank(),
       axis.ticks.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+
+      # Strong Y Axis
+      axis.line.y = ggplot2::element_line(color = "black", linewidth = 0.8),
+      axis.ticks.y = ggplot2::element_line(color = "black", linewidth = 0.8),
+      axis.text.y = ggplot2::element_text(color = "black", size = base_size),
+      axis.title.y = ggplot2::element_text(color = "black", size = base_size + 1, face = "plain"),
+
+      # Clean Background
+      panel.grid = ggplot2::element_blank(),
       strip.background = ggplot2::element_blank(),
-      strip.text = ggplot2::element_text(size = base_size * 1.1, face = "bold"), # Coordinated strip text
-      legend.position = "right",
-      panel.grid.major.y = ggplot2::element_line(color = "grey90", linetype = "dashed")
+      strip.text = ggplot2::element_text(size = base_size * 1.1, face = "plain", color = "black"),
+
+      # Legend Control
+      legend.position = final_legend_pos
     )
 
-  # 6. Label Handling
-  if (labels) {
+  # 6. Label Handling (Conditional)
+  if (show_labels) {
     max_val <- max(abs(plot_data$log2fc), na.rm = TRUE)
     offset <- max_val * 0.05
 
     p <- p + ggplot2::geom_text(
       ggplot2::aes(label = .data$celltype,
-                   y = ifelse(.data$log2fc > 0, .data$log2fc + offset, .data$log2fc - offset),
-                   vjust = ifelse(.data$log2fc > 0, 0, 1)),
-      size = label_size
-    ) + ggplot2::theme(legend.position = "none")
+                   y = ifelse(.data$log2fc >= 0, .data$log2fc + offset, .data$log2fc - offset),
+                   vjust = ifelse(.data$log2fc >= 0, 0, 1)),
+      size = label_size,
+      color = "black"
+    )
   }
 
   return(p)
@@ -1231,23 +1294,22 @@ scVisCellRatio <- function(sce,
 
 # ========= scVisVlnPlot =========
 # ========= 9. scVisVlnPlot =========
-#' @title scVis: Publication-Ready Violin Plot with Stats
-#' @description A wrapper around \code{Seurat::VlnPlot} that adds statistical comparisons and optimizes layout.
-#' Automatically handles the common "Column not found" error in stats calculation by using the internal 'ident' column.
-#' Uses base R pipe (R >= 4.1.0).
+#' @title scVis: Publication-Ready Violin Plot with Stats (Robust)
+#' @description A wrapper around \code{Seurat::VlnPlot} with smart grouping, auto-formatting, and crash-proof statistics.
+#' Automatically skips stats for groups with insufficient cells (<3) to prevent "not enough 'y' observations" errors.
 #'
 #' @param sce A Seurat object.
-#' @param features Vector of feature names (e.g., c("TP53", "CD3D")) to plot.
-#' @param group_col String. Column name to group cells by. If NULL, uses active identity.
-#' @param comparisons List of vectors. Pairs of groups to compare (e.g., \code{list(c("Treat", "Ctrl"))}).
-#' @param palette Vector. Custom colors. If NULL, uses a default vibrant NPG-style palette.
-#' @param pt_size Numeric. Size of the jitter points. Default 0.
-#' @param ncol Numeric. Number of columns for layout. Auto-calculated if NULL.
-#' @param base_size Numeric. Base font size for the plot. Default 14.
-#' @param sign_method String. Statistical test method: "wilcox.test" (default), "t.test", "kruskal.test", or "anova".
-#' @param sign_label String. Label type: "p.signif" (stars) or "p.format" (numbers). Default "p.signif".
-#' @param hide_ns Logical. If TRUE, only displays significant comparisons (p < 0.05). Default TRUE.
-#' @param step_increase Numeric. Spacing between stat brackets. Default 0.1.
+#' @param features Vector of feature names.
+#' @param group_col String. Column name to group cells by. If NULL (default), uses active Idents.
+#' @param comparisons List of vectors or a single vector. Pairs of groups to compare (e.g., \code{c("Treat", "Ctrl")}).
+#' @param palette Vector. Custom colors. Defaults to NPG style.
+#' @param pt_size Numeric. Size of the jitter points. Default 0.1.
+#' @param ncol Numeric. Number of columns.
+#' @param base_size Numeric. Base font size. Default 14.
+#' @param sign_method String. "wilcox.test", "t.test", etc.
+#' @param sign_label String. "p.signif" or "p.format".
+#' @param hide_ns Logical. If TRUE, only displays significant comparisons.
+#' @param step_increase Numeric. Spacing between stat brackets.
 #' @param ... Additional arguments passed to \code{Seurat::VlnPlot}.
 #'
 #' @return A patchwork ggplot object.
@@ -1259,41 +1321,13 @@ scVisCellRatio <- function(sce,
 #' @importFrom patchwork wrap_plots
 #' @importFrom scales hue_pal
 #' @importFrom stats as.formula
-#' @importFrom dplyr filter
+#' @importFrom dplyr filter group_by summarize
 #' @importFrom rlang .data
 #'
 #' @examples
 #' \dontrun{
-#'   library(Seurat)
-#'   library(ggplot2)
-#'
-#'   # --- 1. Mock Data (Using REAL Gene Names) ---
-#'   set.seed(123)
-#'   n_cells <- 300
-#'   # Simulate 5 genes: TP53, CD3D, MS4A1, GAPDH, EGFR
-#'   genes <- c("TP53", "CD3D", "MS4A1", "GAPDH", "EGFR")
-#'   counts <- matrix(rpois(n_cells * 5, 1), nrow = 5, ncol = n_cells)
-#'   rownames(counts) <- genes
-#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
-#'
-#'   sce <- CreateSeuratObject(counts = counts)
-#'   sce$Group <- sample(c("Ctrl", "Treat"), n_cells, replace = TRUE)
-#'
-#'   # Simulate TP53 upregulation in Treat group
-#'   mat <- GetAssayData(sce, slot = "counts")
-#'   mat["TP53", sce$Group == "Treat"] <- mat["TP53", sce$Group == "Treat"] + 3
-#'   sce <- SetAssayData(sce, slot = "counts", new.data = mat)
-#'
-#'   # --- 2. Plot ---
-#'   p <- scVisVlnPlot(
-#'     sce = sce,
-#'     features = c("TP53", "CD3D"), # Real gene symbols
-#'     group_col = "Group",
-#'     comparisons = list(c("Treat", "Ctrl")),
-#'     sign_label = "p.signif",
-#'     pt_size = 0.1
-#'   )
-#'   print(p)
+#'   # Smart defaults: uses active Idents, auto-wraps comparisons
+#'   scVisVlnPlot(sce, features = "Gdf15", comparisons = c("Cluster1", "Cluster2"))
 #' }
 scVisVlnPlot <- function(sce,
                          features,
@@ -1309,22 +1343,28 @@ scVisVlnPlot <- function(sce,
                          step_increase = 0.1,
                          ...) {
 
-  # 1. Dependency & Input Check
+  # 1. Dependency Check
   if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
   if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' is required.")
-  if (!requireNamespace("patchwork", quietly = TRUE)) stop("Package 'patchwork' is required.")
 
-  # 2. Robust Feature Checking
+  # 2. Smart Comparison Handling (Vector -> List)
+  # 移植自 scVisCellFC 的智能逻辑
+  if (!is.null(comparisons)) {
+    if (is.atomic(comparisons) && !is.list(comparisons)) {
+      if (length(comparisons) != 2) stop("For a single comparison, provide a vector of length 2: c('A', 'B').")
+      comparisons <- list(comparisons)
+    }
+  }
+
+  # 3. Robust Feature Checking
   avail_feats <- rownames(sce)
   avail_meta <- colnames(sce@meta.data)
   all_avail <- c(avail_feats, avail_meta)
 
   valid_features <- c()
   for (ft in features) {
-    if (ft %in% all_avail) {
-      valid_features <- c(valid_features, ft)
-    } else {
-      # Try replacing underscore with dash (common Seurat conversion: e.g. HLA_A -> HLA-A)
+    if (ft %in% all_avail) valid_features <- c(valid_features, ft)
+    else {
       ft_alt <- gsub("_", "-", ft)
       if (ft_alt %in% all_avail) {
         message(paste("ℹ️  Auto-corrected feature:", ft, "->", ft_alt))
@@ -1334,90 +1374,112 @@ scVisVlnPlot <- function(sce,
       }
     }
   }
+  if (length(valid_features) == 0) stop("❌ No valid features found to plot.")
 
-  if (length(valid_features) == 0) {
-    head_feats <- paste(head(avail_feats, 3), collapse = ", ")
-    stop(paste0("❌ No valid features found to plot.\n   Top available features in object: ", head_feats, "..."))
+  # 4. Smart Grouping Logic
+  using_active_idents <- FALSE
+  if (is.null(group_col)) {
+    using_active_idents <- TRUE
+  } else {
+    if (!group_col %in% colnames(sce@meta.data)) {
+      if (group_col == "ident") using_active_idents <- TRUE
+      else stop(paste0("❌ Column '", group_col, "' not found in meta.data."))
+    }
   }
 
-  if (is.null(group_col)) group_col <- "ident"
-
-  # 3. Color Palette Logic
-  if (group_col == "ident") {
-    n_groups <- length(unique(Seurat::Idents(sce)))
+  # 5. Color Palette
+  if (using_active_idents) {
+    idents_levels <- levels(Seurat::Idents(sce))
+    n_groups <- if (is.null(idents_levels)) length(unique(Seurat::Idents(sce))) else length(idents_levels)
   } else {
-    if (!group_col %in% colnames(sce@meta.data)) stop(paste("Column", group_col, "not found in meta.data"))
     n_groups <- length(unique(sce@meta.data[[group_col]]))
   }
 
   if (is.null(palette)) {
-    default_pal <- c(
-      "#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F",
-      "#8491B4", "#91D1C2", "#DC0000", "#7E6148", "#B09C85",
-      "#f47c7c", "#aadea7", "#f7f494", "#72ccff", "#c999ff"
-    )
-    if (n_groups > length(default_pal)) {
-      palette <- scales::hue_pal()(n_groups)
-    } else {
-      palette <- default_pal[1:n_groups]
-    }
+    default_pal <- c("#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F",
+                     "#8491B4", "#91D1C2", "#DC0000", "#7E6148", "#B09C85",
+                     "#f47c7c", "#aadea7", "#f7f494", "#72ccff", "#c999ff")
+    palette <- if (n_groups > length(default_pal)) scales::hue_pal()(n_groups) else default_pal[1:n_groups]
   }
 
-  # 4. Generate Base Plots
+  # 6. Generate Base Plots
+  # combine = FALSE allows individual processing
   plots <- Seurat::VlnPlot(
     object = sce,
     features = valid_features,
-    group.by = group_col,
+    group.by = if (using_active_idents) NULL else group_col,
     pt.size = pt_size,
     cols = palette,
     combine = FALSE,
     ...
   )
 
-  # 5. Loop to Customize Each Plot
+  # 7. Loop to Customize Each Plot
   if (is.null(ncol)) ncol <- ceiling(sqrt(length(plots)))
   show_ylab_indices <- which((seq_along(plots) - 1) %% ncol == 0)
 
   modified_plots <- lapply(seq_along(plots), function(i) {
     p <- plots[[i]]
     gene_name <- p$labels$title
+    plot_df <- p$data # Seurat VlnPlot data always contains 'ident' and 'gene'
 
-    # --- A. Statistical Analysis Logic ---
-    final_comparisons <- comparisons
+    # --- A. Safe Stats Logic (Crash Prevention) ---
+    final_comparisons <- NULL
 
-    if (!is.null(comparisons) && hide_ns) {
-      plot_df <- p$data
-      # Use backticks for gene name to handle special chars like 'HLA-A' or 'RP11-...'
-      stats_formula <- stats::as.formula(paste0("`", gene_name, "` ~ ident"))
+    if (!is.null(comparisons)) {
+      # 1. 检查样本量 (Crucial Fix for "not enough 'y' observations")
+      group_counts <- table(plot_df$ident)
 
-      tryCatch({
-        p_res <- ggpubr::compare_means(
-          formula = stats_formula,
-          data = plot_df,
-          method = sign_method
-        )
+      valid_comparisons <- list()
+      for (pair in comparisons) {
+        g1 <- pair[1]
+        g2 <- pair[2]
+        n1 <- group_counts[g1]
+        n2 <- group_counts[g2]
 
-        sig_pairs <- p_res |> dplyr::filter(.data$p < 0.05)
-
-        keep_indices <- c()
-        for (k in seq_along(comparisons)) {
-          pair <- comparisons[[k]]
-          is_sig <- any(
-            (sig_pairs$group1 == pair[1] & sig_pairs$group2 == pair[2]) |
-              (sig_pairs$group1 == pair[2] & sig_pairs$group2 == pair[1])
-          )
-          if (is_sig) keep_indices <- c(keep_indices, k)
-        }
-
-        if (length(keep_indices) > 0) {
-          final_comparisons <- comparisons[keep_indices]
+        # 必须两个组都存在且细胞数 >= 3 才能做 Wilcox 检验
+        if (!is.na(n1) && !is.na(n2) && n1 >= 3 && n2 >= 3) {
+          valid_comparisons <- c(valid_comparisons, list(pair))
         } else {
-          final_comparisons <- NULL
+          warning(paste0("⚠️ Skipping stats for ", g1, " vs ", g2, " in ", gene_name, ": too few cells (<3)."))
         }
-      }, error = function(e) {
-        warning(paste("Stats failed for", gene_name, ":", e$message))
-        final_comparisons <- NULL
-      })
+      }
+
+      # 2. 如果有有效对比，继续计算
+      if (length(valid_comparisons) > 0) {
+        if (hide_ns) {
+          # Use backticks for gene name
+          stats_formula <- stats::as.formula(paste0("`", gene_name, "` ~ ident"))
+
+          tryCatch({
+            # Pass only the valid subset of comparisons to compare_means to be safe
+            p_res <- ggpubr::compare_means(
+              formula = stats_formula,
+              data = plot_df,
+              method = sign_method
+            )
+
+            sig_pairs <- p_res |> dplyr::filter(.data$p < 0.05)
+
+            keep_indices <- c()
+            for (k in seq_along(valid_comparisons)) {
+              pair <- valid_comparisons[[k]]
+              is_sig <- any(
+                (sig_pairs$group1 == pair[1] & sig_pairs$group2 == pair[2]) |
+                  (sig_pairs$group1 == pair[2] & sig_pairs$group2 == pair[1])
+              )
+              if (is_sig) keep_indices <- c(keep_indices, k)
+            }
+            if (length(keep_indices) > 0) final_comparisons <- valid_comparisons[keep_indices]
+
+          }, error = function(e) {
+            warning(paste("Stats calculation failed for", gene_name, ":", e$message))
+          })
+        } else {
+          # 如果不隐藏 NS，直接使用所有有效对比
+          final_comparisons <- valid_comparisons
+        }
+      }
     }
 
     # --- B. Aesthetic Customization ---
@@ -1438,7 +1500,7 @@ scVisVlnPlot <- function(sce,
       ) +
       ggplot2::labs(y = y_lab_text, title = gene_name)
 
-    # --- C. Add Stats Layer ---
+    # --- C. Add Stats Layer (Only if Valid) ---
     if (!is.null(final_comparisons)) {
       top_expansion <- 0.1 + (length(final_comparisons) * 0.08)
 
@@ -1461,3 +1523,4 @@ scVisVlnPlot <- function(sce,
 
   patchwork::wrap_plots(modified_plots, ncol = ncol)
 }
+

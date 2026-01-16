@@ -11,33 +11,43 @@ scVisCellFC(
   comparisons,
   palette = c("#00F672", "#C8A4F9", "#E64B35", "#FF00DB", "#4DBBD5", "#00A087",
     "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148"),
-  labels = TRUE,
-  label_size = 3.5,
-  base_size = 14
+  show_labels = TRUE,
+  show_legend = FALSE,
+  legend_position = "right",
+  label_size = 4,
+  base_size = 14,
+  bar_width = 0.7
 )
 }
 \arguments{
 \item{sce}{A Seurat object.}
 
-\item{group_col}{String. Column name in \code{meta.data} for grouping (e.g., "group", "condition").}
+\item{group_col}{String. Column name in \code{meta.data} for grouping (e.g., "group").}
 
-\item{celltype_col}{String. Column name in \code{meta.data} for cell types (e.g., "cell_type", "cluster").}
+\item{celltype_col}{String. Column name in \code{meta.data} for cell types (e.g., "cell_type").}
 
-\item{comparisons}{A list of character vectors. Each vector must contain two group names: c("Case", "Control").}
+\item{comparisons}{A list of vectors (e.g., \code{list(c("Case", "Ctrl"))}) OR a single vector (e.g., \code{c("Case", "Ctrl")}).}
 
-\item{palette}{Vector. Custom colors. Defaults to NPG style.}
+\item{palette}{Vector. Custom colors. Defaults to a vibrant 12-color palette.}
 
-\item{labels}{Logical. Whether to show cell type labels on bars. Default TRUE.}
+\item{show_labels}{Logical. Whether to show text labels on bars. Default TRUE.}
 
-\item{label_size}{Numeric. Font size for labels on bars. Default 3.5.}
+\item{show_legend}{Logical. Whether to show the legend. Default FALSE.}
 
-\item{base_size}{Numeric. Base font size for the plot theme. Default 12.}
+\item{legend_position}{String. Position of legend ("right", "top", "bottom", "left"). Default "right".}
+
+\item{label_size}{Numeric. Font size for labels. Default 4.}
+
+\item{base_size}{Numeric. Base font size for the plot theme. Default 14.}
+
+\item{bar_width}{Numeric. Width of the bars (0-1). Default 0.7.}
 }
 \value{
 A ggplot object.
 }
 \description{
 Calculates and visualizes the Log2 Fold Change of cell type proportions between groups.
+Features flexible controls for labels, legends, and layout. Optimized for publication-quality figures.
 Uses base R pipe (R >= 4.1.0).
 }
 \examples{
@@ -45,21 +55,42 @@ Uses base R pipe (R >= 4.1.0).
   library(Seurat)
   library(ggplot2)
 
-  # --- Create Mock Data ---
+  # --- 1. Create Mock Data ---
   set.seed(123)
   n_cells <- 300
-  sce <- CreateSeuratObject(counts = matrix(rnorm(n_cells * 10), ncol = n_cells))
+  counts <- matrix(rnorm(n_cells * 10), ncol = n_cells)
+  colnames(counts) <- paste0("Cell_", 1:n_cells)
+  rownames(counts) <- paste0("Gene_", 1:10)
+
+  sce <- CreateSeuratObject(counts = counts)
   sce$Group <- sample(c("Control", "Treat_A", "Treat_B"), n_cells, replace = TRUE)
   sce$CellType <- sample(c("T_cells", "B_cells", "Myeloid", "NK", "Fibro"), n_cells, replace = TRUE)
+
+  # Simulate enrichment of Myeloid in Treat_A
   sce$CellType[sce$Group == "Treat_A" & runif(n_cells) > 0.6] <- "Myeloid"
 
-  # --- Run Function ---
-  p <- scVisCellFC(
+  # --- 2. Basic Usage (Vector Input) ---
+  p1 <- scVisCellFC(
     sce = sce,
     group_col = "Group",
     celltype_col = "CellType",
-    comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control"))
+    comparisons = c("Treat_A", "Control"), # Smart vector handling
+    show_labels = TRUE,
+    show_legend = FALSE
   )
-  print(p)
+  print(p1)
+
+  # --- 3. Advanced Usage (List Input + Legend Customization) ---
+  p2 <- scVisCellFC(
+    sce = sce,
+    group_col = "Group",
+    celltype_col = "CellType",
+    comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control")),
+    show_labels = FALSE,        # Turn off text labels
+    show_legend = TRUE,         # Turn on legend
+    legend_position = "bottom", # Move legend to bottom
+    base_size = 16
+  )
+  print(p2)
 }
 }

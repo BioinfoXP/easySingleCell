@@ -2,7 +2,7 @@
 % Please edit documentation in R/3.scRNA-Viz.R
 \name{scVisVlnPlot}
 \alias{scVisVlnPlot}
-\title{scVis: Publication-Ready Violin Plot with Stats}
+\title{scVis: Publication-Ready Violin Plot with Stats (Robust)}
 \usage{
 scVisVlnPlot(
   sce,
@@ -23,27 +23,27 @@ scVisVlnPlot(
 \arguments{
 \item{sce}{A Seurat object.}
 
-\item{features}{Vector of feature names (e.g., c("TP53", "CD3D")) to plot.}
+\item{features}{Vector of feature names.}
 
-\item{group_col}{String. Column name to group cells by. If NULL, uses active identity.}
+\item{group_col}{String. Column name to group cells by. If NULL (default), uses active Idents.}
 
-\item{comparisons}{List of vectors. Pairs of groups to compare (e.g., \code{list(c("Treat", "Ctrl"))}).}
+\item{comparisons}{List of vectors or a single vector. Pairs of groups to compare (e.g., \code{c("Treat", "Ctrl")}).}
 
-\item{palette}{Vector. Custom colors. If NULL, uses a default vibrant NPG-style palette.}
+\item{palette}{Vector. Custom colors. Defaults to NPG style.}
 
-\item{pt_size}{Numeric. Size of the jitter points. Default 0.}
+\item{pt_size}{Numeric. Size of the jitter points. Default 0.1.}
 
-\item{ncol}{Numeric. Number of columns for layout. Auto-calculated if NULL.}
+\item{ncol}{Numeric. Number of columns.}
 
-\item{base_size}{Numeric. Base font size for the plot. Default 14.}
+\item{base_size}{Numeric. Base font size. Default 14.}
 
-\item{sign_method}{String. Statistical test method: "wilcox.test" (default), "t.test", "kruskal.test", or "anova".}
+\item{sign_method}{String. "wilcox.test", "t.test", etc.}
 
-\item{sign_label}{String. Label type: "p.signif" (stars) or "p.format" (numbers). Default "p.signif".}
+\item{sign_label}{String. "p.signif" or "p.format".}
 
-\item{hide_ns}{Logical. If TRUE, only displays significant comparisons (p < 0.05). Default TRUE.}
+\item{hide_ns}{Logical. If TRUE, only displays significant comparisons.}
 
-\item{step_increase}{Numeric. Spacing between stat brackets. Default 0.1.}
+\item{step_increase}{Numeric. Spacing between stat brackets.}
 
 \item{...}{Additional arguments passed to \code{Seurat::VlnPlot}.}
 }
@@ -51,41 +51,12 @@ scVisVlnPlot(
 A patchwork ggplot object.
 }
 \description{
-A wrapper around \code{Seurat::VlnPlot} that adds statistical comparisons and optimizes layout.
-Automatically handles the common "Column not found" error in stats calculation by using the internal 'ident' column.
-Uses base R pipe (R >= 4.1.0).
+A wrapper around \code{Seurat::VlnPlot} with smart grouping, auto-formatting, and crash-proof statistics.
+Automatically skips stats for groups with insufficient cells (<3) to prevent "not enough 'y' observations" errors.
 }
 \examples{
 \dontrun{
-  library(Seurat)
-  library(ggplot2)
-
-  # --- 1. Mock Data (Using REAL Gene Names) ---
-  set.seed(123)
-  n_cells <- 300
-  # Simulate 5 genes: TP53, CD3D, MS4A1, GAPDH, EGFR
-  genes <- c("TP53", "CD3D", "MS4A1", "GAPDH", "EGFR")
-  counts <- matrix(rpois(n_cells * 5, 1), nrow = 5, ncol = n_cells)
-  rownames(counts) <- genes
-  colnames(counts) <- paste0("Cell_", 1:n_cells)
-
-  sce <- CreateSeuratObject(counts = counts)
-  sce$Group <- sample(c("Ctrl", "Treat"), n_cells, replace = TRUE)
-
-  # Simulate TP53 upregulation in Treat group
-  mat <- GetAssayData(sce, slot = "counts")
-  mat["TP53", sce$Group == "Treat"] <- mat["TP53", sce$Group == "Treat"] + 3
-  sce <- SetAssayData(sce, slot = "counts", new.data = mat)
-
-  # --- 2. Plot ---
-  p <- scVisVlnPlot(
-    sce = sce,
-    features = c("TP53", "CD3D"), # Real gene symbols
-    group_col = "Group",
-    comparisons = list(c("Treat", "Ctrl")),
-    sign_label = "p.signif",
-    pt_size = 0.1
-  )
-  print(p)
+  # Smart defaults: uses active Idents, auto-wraps comparisons
+  scVisVlnPlot(sce, features = "Gdf15", comparisons = c("Cluster1", "Cluster2"))
 }
 }

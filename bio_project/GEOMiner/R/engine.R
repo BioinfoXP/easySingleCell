@@ -57,10 +57,11 @@
     RAW METADATA: {raw_text_llm}
 
     RULES:
+    -Always use professional English not other language.
     - Return ONLY valid JSON. No markdown, no extra text.
     - All fields must be present. If unknown, use \"\".
     - match_score must be an integer 0-100.
-    - score_reason must be <= 50 words and justify the score (relevance, sample size, clinical detail, organism).
+    - score_reason must be <= 100 words and justify the score (relevance, sample size, clinical detail, organism).
     - scoring fully considering {user_query} and {ctx_prompt}
     MATCH SCORE GUIDELINES:
     - 90-100 (High): Perfect/near-perfect match; rich clinical/phenotype detail and/or large sample size; correct organism.

@@ -2,43 +2,37 @@
 % Please edit documentation in R/2.scRNA-basic.R
 \name{runScRNAQC}
 \alias{runScRNAQC}
-\title{Filter and Plot scRNA-seq Data}
+\title{scVis: Pure QC (No Plotting)}
 \usage{
 runScRNAQC(
   sce,
   minGene = 200,
-  maxGene = 5000,
-  pctMT = 15,
+  maxGene = 6000,
+  pctMT = 20,
   maxCounts = 20000,
   species = "human",
-  pal = 100,
-  output_dir = "./output_figure/",
-  width = 6,
-  height = 4
+  mt_pattern = NULL
 )
 }
 \arguments{
 \item{sce}{A Seurat object.}
 
-\item{minGene}{Minimum genes. Default 200.}
+\item{minGene}{Min detected genes (nFeature_RNA). Default 200.}
 
-\item{maxGene}{Maximum genes. Default 5000.}
+\item{maxGene}{Max detected genes. Default 6000.}
 
-\item{pctMT}{Max mitochondrial \%. Default 15.}
+\item{pctMT}{Max mitochondrial percentage. Default 20.}
 
-\item{maxCounts}{Max UMI counts. Default 20000.}
+\item{maxCounts}{Max UMI counts (nCount_RNA). Default 20000.}
 
-\item{species}{"human" or "mouse".}
+\item{species}{"human" (starts with MT-) or "mouse" (starts with mt-).}
 
-\item{pal}{Numeric ID (1-100) or color vector.}
-
-\item{output_dir}{Output path.}
-
-\item{width, height}{PDF dimensions.}
+\item{mt_pattern}{Custom regex for mitochondrial genes. If NULL, infers from species.}
 }
 \value{
-Filtered Seurat object.
+A filtered Seurat object.
 }
 \description{
-Filters scRNA-seq data and saves QC violin plots.
+Calculates mitochondrial percentage and filters cells based on thresholds.
+Does NOT generate plots or save files. Fast and robust for Seurat v4/v5.
 }

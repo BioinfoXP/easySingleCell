@@ -1,50 +1,80 @@
 # =============== 质控 ================
 # =============== 1.QC  ================
 
-#' Filter and Plot scRNA-seq Data
+#' @title scVis: Pure QC (No Plotting)
+#' @description Calculates mitochondrial percentage and filters cells based on thresholds.
+#' Does NOT generate plots or save files. Fast and robust for Seurat v4/v5.
 #'
-#' @description Filters scRNA-seq data and saves QC violin plots.
 #' @param sce A Seurat object.
-#' @param minGene Minimum genes. Default 200.
-#' @param maxGene Maximum genes. Default 5000.
-#' @param pctMT Max mitochondrial %. Default 15.
-#' @param maxCounts Max UMI counts. Default 20000.
-#' @param species "human" or "mouse".
-#' @param pal Numeric ID (1-100) or color vector.
-#' @param output_dir Output path.
-#' @param width,height PDF dimensions.
-#' @return Filtered Seurat object.
-#' @importFrom Seurat PercentageFeatureSet VlnPlot NoLegend
-#' @importFrom ggplot2 ggsave
+#' @param minGene Min detected genes (nFeature_RNA). Default 200.
+#' @param maxGene Max detected genes. Default 6000.
+#' @param pctMT Max mitochondrial percentage. Default 20.
+#' @param maxCounts Max UMI counts (nCount_RNA). Default 20000.
+#' @param species "human" (starts with MT-) or "mouse" (starts with mt-).
+#' @param mt_pattern Custom regex for mitochondrial genes. If NULL, infers from species.
+#'
+#' @return A filtered Seurat object.
 #' @export
-runScRNAQC <- function(sce, minGene = 200, maxGene = 5000, pctMT = 15, maxCounts = 20000,
-                       species = 'human', pal = 100, output_dir = "./output_figure/",
-                       width = 6, height = 4) {
+#' @importFrom Seurat PercentageFeatureSet
+#'
+runScRNAQC <- function(sce,
+                       minGene = 200,
+                       maxGene = 6000,
+                       pctMT = 20,
+                       maxCounts = 20000,
+                       species = 'human',
+                       mt_pattern = NULL) {
 
-  if (!base::dir.exists(output_dir)) base::dir.create(output_dir, recursive = TRUE)
-  actual_pal <- .get_pal(pal)
+  # --- 1. 基础检查 ---
+  if (missing(sce) || is.null(sce)) stop("❌ Error: Input 'sce' is NULL.")
 
-  mt_pattern <- base::switch(base::tolower(species), "human" = "^MT-", "mouse" = "^mt-",
-                             base::stop("Unsupported species."))
-
-  sce[["percent.mt"]] <- Seurat::PercentageFeatureSet(sce, pattern = mt_pattern)
-
-  .save_qc <- function(obj, stage) {
-    for (f in c("nCount_RNA", "nFeature_RNA", "percent.mt")) {
-      p <- Seurat::VlnPlot(obj, features = f, cols = actual_pal, pt.size = 0) + Seurat::NoLegend()
-      ggplot2::ggsave(base::file.path(output_dir, base::paste0(stage, "-", f, ".pdf")),
-                      plot = p, width = width, height = height)
-    }
+  # --- 2. 计算线粒体比例 ---
+  if (is.null(mt_pattern)) {
+    mt_pattern <- switch(tolower(species),
+                         "human" = "^MT-",
+                         "mouse" = "^mt-",
+                         stop("❌ Unsupported species. Please provide 'mt_pattern' manually."))
   }
 
-  .save_qc(sce, "BeforeQC")
-  scRNA_filtered <- base::subset(sce, subset = nFeature_RNA > minGene & nFeature_RNA < maxGene &
-                                   percent.mt < pctMT & nCount_RNA < maxCounts)
-  .save_qc(scRNA_filtered, "AfterQC")
+  # 如果 percent.mt 尚未计算，则计算它
+  if (!"percent.mt" %in% colnames(sce@meta.data)) {
+    message(paste0("ℹ️ Calculating mitochondrial percentage using pattern: ", mt_pattern))
+    sce[["percent.mt"]] <- Seurat::PercentageFeatureSet(sce, pattern = mt_pattern)
+  }
 
-  base::return(scRNA_filtered)
+  # --- 3. 执行过滤 (使用 Metadata 索引，最稳健的方式) ---
+  n_before <- ncol(sce)
+  meta <- sce@meta.data
+
+  # 找出符合条件的细胞 ID
+  keep_cells <- rownames(meta)[
+    meta$nFeature_RNA > minGene &
+      meta$nFeature_RNA < maxGene &
+      meta$percent.mt < pctMT &
+      meta$nCount_RNA < maxCounts
+  ]
+
+  n_after <- length(keep_cells)
+  n_removed <- n_before - n_after
+
+  # --- 4. 打印报告 ---
+  cat(sprintf("\n====== scRNA-seq QC Report ======\n"))
+  cat(sprintf("Input Cells:      %d\n", n_before))
+  cat(sprintf("Filtering Criteria:\n"))
+  cat(sprintf("  - Gene Count:   %d < nFeature < %d\n", minGene, maxGene))
+  cat(sprintf("  - Mito Percent: < %s%%\n", pctMT))
+  cat(sprintf("  - Max UMI:      < %d\n", maxCounts))
+  cat(sprintf("---------------------------------\n"))
+  cat(sprintf("Remaining Cells:  %d\n", n_after))
+  cat(sprintf("Removed Cells:    %d (%.2f%%)\n", n_removed, (n_removed/n_before)*100))
+  cat(sprintf("=================================\n\n"))
+
+  if (n_after == 0) stop("❌ Error: All cells were filtered out! Please adjust thresholds.")
+
+  # --- 5. 返回对象 ---
+  # 直接切片，兼容 v4/v5
+  return(sce[, keep_cells])
 }
-
 
 # =============== 预处理 ================
 # =============== 2.run_preprocess ================

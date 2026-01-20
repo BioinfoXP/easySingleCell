@@ -266,50 +266,129 @@ scVisDimPlot <- function(scRNA,
 
 # =============== DotPlot  ================
 # =============== 3.scVisDotPlot  ================
-
-#' @title Visualize Marker Expression using a Styled DotPlot
-#' @description A wrapper around \code{Seurat::DotPlot} with enhanced aesthetics.
-#' Features customizable color palettes, refined legends (hollow circles), and consistent axis styling.
+#' @title scVis: Universal DotPlot (Vector & List Support)
+#' @description A pure ggplot2 implementation of DotPlot that automatically adapts to input type.
+#' - If 'features' is a VECTOR: Plots a standard DotPlot (no facets).
+#' - If 'features' is a LIST: Plots a grouped DotPlot with facets (supports duplicate genes).
 #'
 #' @param object A Seurat object.
-#' @param features A vector of features (genes) to plot.
-#' @param group.by String. Name of the meta.data column to group the cells by. Default is NULL (uses active idents).
-#' @param pal Character vector. Custom color palette for the gradient.
-#' If NULL, defaults to \code{rev(RColorBrewer::brewer.pal(7, "RdBu"))}.
-#' @param rot_angle Numeric. Angle of x-axis text labels. Default is 45.
-#' @param font.size Numeric. Font size for axis labels. Default is 12.
-#' @param ... \strong{Additional arguments passed to Seurat::DotPlot}.
-#' Examples: \code{split.by}, \code{assay}, \code{cols} (will be overwritten by pal), \code{scale}.
+#' @param features A vector of genes OR a named list of vectors.
+#' @param group.by String. Column to group cells by (y-axis). Default: active Idents.
+#' @param pal Character vector. Gradient colors.
+#' @param rot_angle Numeric. Angle of x-axis text. Default 45 for vector, 90 for list usually looks best.
+#' @param font.size Numeric. Base font size.
+#' @param scale.min Numeric. Minimum limit for scaled expression (default -2.5).
+#' @param scale.max Numeric. Maximum limit for scaled expression (default 2.5).
 #'
 #' @return A ggplot object.
 #' @export
-#' @importFrom Seurat DotPlot
-#' @importFrom ggplot2 scale_color_gradientn scale_size_continuous guide_colorbar guide_legend guides theme_bw theme element_blank element_rect element_line element_text margin unit
-#' @importFrom RColorBrewer brewer.pal
+#' @importFrom Seurat FetchData Idents
+#' @importFrom ggplot2 ggplot aes geom_point scale_color_gradientn scale_size facet_grid theme_bw element_text element_blank unit element_rect
+#' @importFrom dplyr group_by summarise mutate ungroup bind_rows
+#' @importFrom tidyr pivot_longer
 #'
 #' @examples
 #' \dontrun{
-#'   markers <- c("CD3D", "CD79A", "MS4A1", "CD14", "FCGR3A")
+#'   # Mode 1: Standard Vector
+#'   scVisDotPlot(sce, features = c("Ptprc", "Lyz2", "CD14"))
 #'
-#'   # 1. 默认用法 (45度旋转，RdBu配色，字体大小12)
-#'   scVisDotPlot(pbmc, features = markers)
-#'
-#'   # 2. 如果想改回90度
-#'   scVisDotPlot(pbmc, features = markers, rot_angle = 90)
-#'
-#'   # 3. 自定义配色
-#'   my_pal <- c("#2166ac", "#f7f7f7", "#b2182b")
-#'   scVisDotPlot(pbmc, features = markers, pal = my_pal)
+#'   # Mode 2: Grouped List (with facets)
+#'   markers <- list("Immune" = c("Ptprc", "Lyz2"), "Myeloid" = c("CD14", "Lyz2"))
+#'   scVisDotPlot(sce, features = markers)
 #' }
 scVisDotPlot <- function(object,
                          features,
                          group.by = NULL,
                          pal = NULL,
-                         rot_angle = 45,  # 默认修改为 45 度
+                         rot_angle = 45,
                          font.size = 12,
+                         scale.min = NA,
+                         scale.max = NA,
                          ...) {
 
-  # 1. 确定配色方案
+  # --- 1. 判断模式 (向量 vs 列表) ---
+  is_grouped <- is.list(features)
+
+  if (is_grouped && is.null(names(features))) {
+    stop("❌ If 'features' is a list, it must be named (e.g., list('GroupA' = c(...))).")
+  }
+
+  # --- 2. 准备基因列表 ---
+  if (is_grouped) {
+    all_genes_input <- unique(unlist(features))
+  } else {
+    all_genes_input <- unique(features)
+  }
+
+  # 检查基因是否存在
+  avail_genes <- rownames(object)
+  valid_genes <- all_genes_input[all_genes_input %in% avail_genes]
+  missing_genes <- setdiff(all_genes_input, avail_genes)
+
+  if (length(missing_genes) > 0) {
+    warning(paste("⚠️ Skipped missing genes:", paste(missing_genes, collapse = ", ")), call. = FALSE)
+  }
+  if (length(valid_genes) == 0) stop("❌ No valid genes found in the object.")
+
+  # --- 3. 设置分组 ---
+  if (is.null(group.by)) {
+    object$scVis_ident <- Seurat::Idents(object)
+    group.by <- "scVis_ident"
+  } else if (!group.by %in% colnames(object@meta.data)) {
+    stop(paste0("❌ Group column '", group.by, "' not found."))
+  }
+
+  # --- 4. 计算基础统计量 (Mean & Pct) ---
+  # 这一步对两种模式是通用的
+  dat <- Seurat::FetchData(object, vars = c(valid_genes, group.by))
+
+  base_data <- dat |>
+    tidyr::pivot_longer(cols = all_of(valid_genes), names_to = "Gene", values_to = "Expr") |>
+    dplyr::group_by(CellType = .data[[group.by]], Gene) |>
+    dplyr::summarise(
+      AvgExp = mean(expm1(.data$Expr)), # 非Log空间求均值
+      PctExp = sum(.data$Expr > 0) / dplyr::n() * 100,
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(AvgExp = log1p(.data$AvgExp)) # Log回去
+
+  # Z-Score Scaling
+  base_data <- base_data |>
+    dplyr::group_by(Gene) |>
+    dplyr::mutate(AvgExpScaled = as.numeric(scale(.data$AvgExp))) |>
+    dplyr::ungroup()
+
+  # 截断值处理
+  if (!is.na(scale.min)) base_data$AvgExpScaled[base_data$AvgExpScaled < scale.min] <- scale.min
+  if (!is.na(scale.max)) base_data$AvgExpScaled[base_data$AvgExpScaled > scale.max] <- scale.max
+
+  # --- 5. 构建绘图数据 (分支逻辑) ---
+
+  if (is_grouped) {
+    # === 模式 A: 列表 (带分面，支持重复) ===
+    final_df_list <- list()
+    for (grp_name in names(features)) {
+      grp_genes <- features[[grp_name]]
+      grp_genes <- grp_genes[grp_genes %in% valid_genes]
+      if (length(grp_genes) == 0) next
+
+      sub_df <- base_data[base_data$Gene %in% grp_genes, ]
+      sub_df$FeatureGroup <- grp_name
+      # 强制因子水平以保持列表顺序
+      sub_df$Gene <- factor(sub_df$Gene, levels = grp_genes)
+      final_df_list[[grp_name]] <- sub_df
+    }
+    final_plot_data <- dplyr::bind_rows(final_df_list)
+    final_plot_data$FeatureGroup <- factor(final_plot_data$FeatureGroup, levels = names(features))
+
+  } else {
+    # === 模式 B: 向量 (无分面，标准展示) ===
+    final_plot_data <- base_data
+    # 强制因子水平以保持输入向量顺序
+    final_plot_data$Gene <- factor(final_plot_data$Gene, levels = valid_genes)
+  }
+
+  # --- 6. 配色方案 ---
   if (is.null(pal)) {
     if (requireNamespace("RColorBrewer", quietly = TRUE)) {
       pal <- rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu"))
@@ -318,93 +397,44 @@ scVisDotPlot <- function(object,
     }
   }
 
-  # 2. 调用 Seurat::DotPlot
-  p <- Seurat::DotPlot(
-    object = object,
-    features = features,
-    group.by = group.by,
-    ...
-  )
+  # --- 7. 绘图 (ggplot2) ---
+  p <- ggplot2::ggplot(final_plot_data, ggplot2::aes(x = .data$Gene, y = .data$CellType)) +
+    ggplot2::geom_point(ggplot2::aes(size = .data$PctExp, color = .data$AvgExpScaled)) +
 
-  # 3. 移除 Seurat 默认的颜色标尺
-  p$scales$scales <- list()
-
-  # 4. 应用美化图层
-  p <- p +
-    # --- 颜色设置 ---
+    # 标尺
     ggplot2::scale_color_gradientn(
       colors = pal,
-      guide = ggplot2::guide_colorbar(
-        title = "Mean expression",
-        barwidth = 0.8,
-        barheight = 4,
-        ticks = TRUE
-      )
+      guide = ggplot2::guide_colorbar(title = "Mean Exp\n(Scaled)", order = 1)
     ) +
-
-    # --- 大小设置 ---
     ggplot2::scale_size_continuous(
-      range = c(0, 5),
-      breaks = c(25, 50, 75, 100),
-      labels = c("25", "50", "75", "100")
+      range = c(0, 6),
+      labels = c("20", "40", "60", "80", "100"),
+      guide = ggplot2::guide_legend(title = "Fraction (%)", order = 2, override.aes = list(shape=21, fill="grey", color="black"))
     ) +
 
-    # --- 图例样式 ---
-    ggplot2::guides(
-      size = ggplot2::guide_legend(
-        title = "Fraction of cells (%)",
-        override.aes = list(
-          shape = 21,
-          colour = "black",
-          fill = NA,
-          stroke = 0.5
-        )
-      )
-    ) +
-
-    # --- 主题设置 ---
+    # 主题
     ggplot2::theme_bw() +
     ggplot2::theme(
-      # 去除分面背景
-      strip.background = ggplot2::element_blank(),
-      strip.text = ggplot2::element_blank(),
-
-      # 面板间距与边框
-      panel.spacing = ggplot2::unit(0.1, "lines"),
-      panel.border = ggplot2::element_rect(color = "black", fill = NA, linewidth = 0.5),
-
-      # 网格线
-      panel.grid.major = ggplot2::element_line(color = "grey95", linewidth = 0.2),
-
-      # --- 字体美化核心区域 ---
-
-      # X轴: 基因名 (斜体), 黑色, 45度角优化
-      axis.text.x = ggplot2::element_text(
-        size = font.size,
-        color = "black",
-        face = "italic",
-        angle = rot_angle,
-        hjust = 1, # 45度时，hjust=1 保证文字末端对齐刻度
-        vjust = 1  # 45度时，vjust=1 保证文字不与轴线重叠
-      ),
-
-      # Y轴: 细胞类型 (常规), 黑色
-      axis.text.y = ggplot2::element_text(
-        size = font.size,
-        color = "black",
-        face = "plain"
-      ),
-
-      # 去除轴标题
+      axis.text.x = ggplot2::element_text(angle = rot_angle, hjust = 1, vjust = if(rot_angle==45) 1 else 0.5,
+                                          face = "italic", color = "black", size = font.size),
+      axis.text.y = ggplot2::element_text(color = "black", size = font.size),
       axis.title = ggplot2::element_blank(),
-
-      # 页边距
-      plot.margin = ggplot2::margin(10, 10, 10, 10)
+      panel.grid.major = ggplot2::element_line(color = "grey90", linewidth = 0.2),
+      panel.spacing = ggplot2::unit(0.1, "lines")
     )
+
+  # --- 8. 仅在列表模式下添加分面 ---
+  if (is_grouped) {
+    p <- p +
+      ggplot2::facet_grid(cols = ggplot2::vars(.data$FeatureGroup), scales = "free_x", space = "free_x") +
+      ggplot2::theme(
+        strip.background = ggplot2::element_rect(fill = NA, color = "black", linewidth = 1),
+        strip.text = ggplot2::element_text(face = "bold", size = font.size)
+      )
+  }
 
   return(p)
 }
-
 # =============== scVisRatioBox  ================
 # =============== 4.scVisRatioBox  ================
 #' @title scVis: Cell Proportion Boxplot with Stats

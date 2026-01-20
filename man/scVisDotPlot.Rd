@@ -2,7 +2,7 @@
 % Please edit documentation in R/3.scRNA-Viz.R
 \name{scVisDotPlot}
 \alias{scVisDotPlot}
-\title{Visualize Marker Expression using a Styled DotPlot}
+\title{scVis: Universal DotPlot (Vector & List Support)}
 \usage{
 scVisDotPlot(
   object,
@@ -11,45 +11,45 @@ scVisDotPlot(
   pal = NULL,
   rot_angle = 45,
   font.size = 12,
+  scale.min = NA,
+  scale.max = NA,
   ...
 )
 }
 \arguments{
 \item{object}{A Seurat object.}
 
-\item{features}{A vector of features (genes) to plot.}
+\item{features}{A vector of genes OR a named list of vectors.}
 
-\item{group.by}{String. Name of the meta.data column to group the cells by. Default is NULL (uses active idents).}
+\item{group.by}{String. Column to group cells by (y-axis). Default: active Idents.}
 
-\item{pal}{Character vector. Custom color palette for the gradient.
-If NULL, defaults to \code{rev(RColorBrewer::brewer.pal(7, "RdBu"))}.}
+\item{pal}{Character vector. Gradient colors.}
 
-\item{rot_angle}{Numeric. Angle of x-axis text labels. Default is 45.}
+\item{rot_angle}{Numeric. Angle of x-axis text. Default 45 for vector, 90 for list usually looks best.}
 
-\item{font.size}{Numeric. Font size for axis labels. Default is 12.}
+\item{font.size}{Numeric. Base font size.}
 
-\item{...}{\strong{Additional arguments passed to Seurat::DotPlot}.
-Examples: \code{split.by}, \code{assay}, \code{cols} (will be overwritten by pal), \code{scale}.}
+\item{scale.min}{Numeric. Minimum limit for scaled expression (default -2.5).}
+
+\item{scale.max}{Numeric. Maximum limit for scaled expression (default 2.5).}
 }
 \value{
 A ggplot object.
 }
 \description{
-A wrapper around \code{Seurat::DotPlot} with enhanced aesthetics.
-Features customizable color palettes, refined legends (hollow circles), and consistent axis styling.
+A pure ggplot2 implementation of DotPlot that automatically adapts to input type.
+\itemize{
+\item If 'features' is a VECTOR: Plots a standard DotPlot (no facets).
+\item If 'features' is a LIST: Plots a grouped DotPlot with facets (supports duplicate genes).
+}
 }
 \examples{
 \dontrun{
-  markers <- c("CD3D", "CD79A", "MS4A1", "CD14", "FCGR3A")
+  # Mode 1: Standard Vector
+  scVisDotPlot(sce, features = c("Ptprc", "Lyz2", "CD14"))
 
-  # 1. 默认用法 (45度旋转，RdBu配色，字体大小12)
-  scVisDotPlot(pbmc, features = markers)
-
-  # 2. 如果想改回90度
-  scVisDotPlot(pbmc, features = markers, rot_angle = 90)
-
-  # 3. 自定义配色
-  my_pal <- c("#2166ac", "#f7f7f7", "#b2182b")
-  scVisDotPlot(pbmc, features = markers, pal = my_pal)
+  # Mode 2: Grouped List (with facets)
+  markers <- list("Immune" = c("Ptprc", "Lyz2"), "Myeloid" = c("CD14", "Lyz2"))
+  scVisDotPlot(sce, features = markers)
 }
 }

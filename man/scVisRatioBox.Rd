@@ -2,80 +2,68 @@
 % Please edit documentation in R/3.scRNA-Viz.R
 \name{scVisRatioBox}
 \alias{scVisRatioBox}
-\title{scVis: Cell Proportion Boxplot with Stats}
+\title{scVis: Publication-Ready Cell Proportion Boxplot}
 \usage{
 scVisRatioBox(
   sce,
   group_col,
   celltype_col,
   sample_col,
+  ref_group = NULL,
   comparisons = NULL,
   sign_method = "wilcox.test",
   sign_label = "p.signif",
+  hide_ns = FALSE,
+  legend_position = "top",
   palette = NULL,
-  pt_size = 1.5,
-  box_width = 0.6,
+  pt_size = 1.2,
+  box_width = 0.5,
   base_size = 14
 )
 }
 \arguments{
 \item{sce}{A Seurat object.}
 
-\item{group_col}{String. Column name for conditions (e.g., "Treatment").}
+\item{group_col}{String. Grouping column (e.g., "Group").}
 
-\item{celltype_col}{String. Column name for cell types.}
+\item{celltype_col}{String. Cell type column (e.g., "cluster").}
 
-\item{sample_col}{String. Column name for biological samples (e.g., "orig.ident").}
+\item{sample_col}{String. Sample column (e.g., "sample").}
 
-\item{comparisons}{List of vectors. Pairs to compare (e.g., \code{list(c("A", "B"))}). If NULL, performs global test.}
+\item{ref_group}{String. Optional. Reference group for One-vs-All stats (e.g., "Control").}
 
-\item{sign_method}{String. Test method: "wilcox.test" (default), "t.test", "kruskal.test", or "anova".}
+\item{comparisons}{Ignored. Auto-calculated based on groups.}
 
-\item{sign_label}{String. Label type: "p.signif" (*) or "p.format" (numbers).}
+\item{sign_method}{String. "wilcox.test" (default) or "t.test".}
 
-\item{palette}{Vector. Custom colors. If NULL, uses default vibrant palette.}
+\item{sign_label}{String. "p.signif" (*) or "p.format" (value).}
 
-\item{pt_size}{Numeric. Size of jitter points. Default 1.5.}
+\item{hide_ns}{Logical. Whether to hide non-significant results. Default FALSE.}
 
-\item{box_width}{Numeric. Width of boxplots. Default 0.6.}
+\item{legend_position}{String or Vector. e.g., "top", "right", "none", or c(0.8, 0.8).}
 
-\item{base_size}{Numeric. Base font size. Default 14.}
+\item{palette}{Vector. Custom colors.}
+
+\item{pt_size}{Numeric. Jitter point size. Default 1.2.}
+
+\item{box_width}{Numeric. Box width. Default 0.5.}
+
+\item{base_size}{Numeric. Font size. Default 14.}
 }
 \value{
 A ggplot object.
 }
 \description{
-Calculates cell type proportions per sample and performs statistical comparisons between groups using Boxplots.
-Automatically handles missing cell types (fills 0) and maps samples back to their groups correctly.
-Uses base R pipe (R >= 4.1.0).
+A beautified boxplot for cell type proportions with flexible legend controls and robust statistics.
+Supports global tests (Kruskal/ANOVA), pairwise tests (Wilcox/T-test), and One-vs-All comparisons.
 }
 \examples{
 \dontrun{
-  library(Seurat)
-  library(ggplot2)
+  # 1. 美化版 + 图例在右侧
+  scVisRatioBox(sce, "Group", "celltype", "sample", legend_position = "right")
 
-  # --- 1. Mock Data ---
-  set.seed(123)
-  n_cells <- 1000
-  counts <- matrix(rpois(n_cells * 10, 1), nrow = 10, ncol = n_cells)
-  rownames(counts) <- paste0("Gene_", 1:10)
-  colnames(counts) <- paste0("Cell_", 1:n_cells)
-  sce <- CreateSeuratObject(counts = counts)
-
-  # Simulate Metadata
-  sce$Group <- sample(c("Ctrl", "Treat"), n_cells, replace = TRUE)
-  sce$Sample <- paste0(sce$Group, "_Rep", sample(1:3, n_cells, replace = TRUE))
-  sce$CellType <- sample(c("T_cell", "B_cell", "Macro"), n_cells, replace = TRUE)
-
-  # --- 2. Plot ---
-  p <- scVisRatioBox(
-    sce = sce,
-    group_col = "Group",
-    celltype_col = "CellType",
-    sample_col = "Sample",
-    comparisons = list(c("Treat", "Ctrl")), # Pairwise comparison
-    sign_label = "p.signif"
-  )
-  print(p)
+  # 2. 指定参考组 + 隐藏 NS + 图例在顶部
+  scVisRatioBox(sce, "Group", "celltype", "sample",
+                ref_group = "Control", hide_ns = TRUE, legend_position = "top")
 }
 }

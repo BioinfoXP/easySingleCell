@@ -437,193 +437,173 @@ scVisDotPlot <- function(object,
 }
 # =============== scVisRatioBox  ================
 # =============== 4.scVisRatioBox  ================
-#' @title scVis: Cell Proportion Boxplot with Stats
-#' @description Calculates cell type proportions per sample and performs statistical comparisons between groups using Boxplots.
-#' Automatically handles missing cell types (fills 0) and maps samples back to their groups correctly.
-#' Uses base R pipe (R >= 4.1.0).
+#' @title scVis: Publication-Ready Cell Proportion Boxplot
+#' @description A beautified boxplot for cell type proportions with flexible legend controls and robust statistics.
+#' Supports global tests (Kruskal/ANOVA), pairwise tests (Wilcox/T-test), and One-vs-All comparisons.
 #'
 #' @param sce A Seurat object.
-#' @param group_col String. Column name for conditions (e.g., "Treatment").
-#' @param celltype_col String. Column name for cell types.
-#' @param sample_col String. Column name for biological samples (e.g., "orig.ident").
-#' @param comparisons List of vectors. Pairs to compare (e.g., \code{list(c("A", "B"))}). If NULL, performs global test.
-#' @param sign_method String. Test method: "wilcox.test" (default), "t.test", "kruskal.test", or "anova".
-#' @param sign_label String. Label type: "p.signif" (*) or "p.format" (numbers).
-#' @param palette Vector. Custom colors. If NULL, uses default vibrant palette.
-#' @param pt_size Numeric. Size of jitter points. Default 1.5.
-#' @param box_width Numeric. Width of boxplots. Default 0.6.
-#' @param base_size Numeric. Base font size. Default 14.
+#' @param group_col String. Grouping column (e.g., "Group").
+#' @param celltype_col String. Cell type column (e.g., "cluster").
+#' @param sample_col String. Sample column (e.g., "sample").
+#' @param ref_group String. Optional. Reference group for One-vs-All stats (e.g., "Control").
+#' @param comparisons Ignored. Auto-calculated based on groups.
+#' @param sign_method String. "wilcox.test" (default) or "t.test".
+#' @param sign_label String. "p.signif" (*) or "p.format" (value).
+#' @param hide_ns Logical. Whether to hide non-significant results. Default FALSE.
+#' @param legend_position String or Vector. e.g., "top", "right", "none", or c(0.8, 0.8).
+#' @param palette Vector. Custom colors.
+#' @param pt_size Numeric. Jitter point size. Default 1.2.
+#' @param box_width Numeric. Box width. Default 0.5.
+#' @param base_size Numeric. Font size. Default 14.
 #'
 #' @return A ggplot object.
 #' @export
 #'
 #' @importFrom Seurat FetchData
-#' @importFrom dplyr group_by summarise mutate ungroup n select distinct left_join
+#' @importFrom dplyr group_by summarise mutate ungroup distinct left_join select
 #' @importFrom tidyr complete
-#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter scale_fill_manual scale_color_manual scale_y_continuous labs theme_classic theme element_text element_line position_dodge position_jitterdodge
+#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter scale_fill_manual scale_color_manual scale_y_continuous labs theme_classic theme element_text element_line position_dodge position_jitterdodge expansion element_rect
 #' @importFrom ggpubr stat_compare_means
 #' @importFrom scales percent hue_pal
 #' @importFrom rlang .data
 #'
 #' @examples
 #' \dontrun{
-#'   library(Seurat)
-#'   library(ggplot2)
+#'   # 1. 美化版 + 图例在右侧
+#'   scVisRatioBox(sce, "Group", "celltype", "sample", legend_position = "right")
 #'
-#'   # --- 1. Mock Data ---
-#'   set.seed(123)
-#'   n_cells <- 1000
-#'   counts <- matrix(rpois(n_cells * 10, 1), nrow = 10, ncol = n_cells)
-#'   rownames(counts) <- paste0("Gene_", 1:10)
-#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
-#'   sce <- CreateSeuratObject(counts = counts)
-#'
-#'   # Simulate Metadata
-#'   sce$Group <- sample(c("Ctrl", "Treat"), n_cells, replace = TRUE)
-#'   sce$Sample <- paste0(sce$Group, "_Rep", sample(1:3, n_cells, replace = TRUE))
-#'   sce$CellType <- sample(c("T_cell", "B_cell", "Macro"), n_cells, replace = TRUE)
-#'
-#'   # --- 2. Plot ---
-#'   p <- scVisRatioBox(
-#'     sce = sce,
-#'     group_col = "Group",
-#'     celltype_col = "CellType",
-#'     sample_col = "Sample",
-#'     comparisons = list(c("Treat", "Ctrl")), # Pairwise comparison
-#'     sign_label = "p.signif"
-#'   )
-#'   print(p)
+#'   # 2. 指定参考组 + 隐藏 NS + 图例在顶部
+#'   scVisRatioBox(sce, "Group", "celltype", "sample",
+#'                 ref_group = "Control", hide_ns = TRUE, legend_position = "top")
 #' }
 scVisRatioBox <- function(sce,
                           group_col,
                           celltype_col,
                           sample_col,
+                          ref_group = NULL,
                           comparisons = NULL,
                           sign_method = "wilcox.test",
                           sign_label = "p.signif",
+                          hide_ns = FALSE,
+                          legend_position = "top", # <--- 新增参数
                           palette = NULL,
-                          pt_size = 1.5,
-                          box_width = 0.6,
+                          pt_size = 1.2,
+                          box_width = 0.5,
                           base_size = 14) {
 
-  # 1. Input Validation
+  # --- 1. 输入检查 ---
   if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
   if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' is required.")
-
-  # Check columns
-  req_cols <- c(group_col, celltype_col, sample_col)
-  if (!all(req_cols %in% colnames(sce@meta.data))) {
-    missing <- req_cols[!req_cols %in% colnames(sce@meta.data)]
-    stop(paste("❌ Columns not found in meta.data:", paste(missing, collapse = ", ")))
+  if (!all(c(group_col, celltype_col, sample_col) %in% colnames(sce@meta.data))) {
+    stop("❌ Columns not found in meta.data.")
   }
 
-  # 2. Data Preparation
-  # Extract raw data
+  # --- 2. 数据准备 ---
   meta_df <- Seurat::FetchData(sce, vars = c(group_col, celltype_col, sample_col))
   colnames(meta_df) <- c("Group", "CellType", "Sample")
+  meta_df$Group <- as.factor(meta_df$Group)
 
-  # Create a lookup table for Sample -> Group mapping
-  # This is SAFER than na.omit() after complete(), which can lose group info
-  sample_info <- meta_df |>
-    dplyr::select("Sample", "Group") |>
-    dplyr::distinct()
+  if (!is.null(ref_group) && !ref_group %in% levels(meta_df$Group)) {
+    stop(paste0("❌ ref_group '", ref_group, "' not found."))
+  }
 
-  # Calculate Proportions
+  sample_info <- meta_df |> dplyr::select("Sample", "Group") |> dplyr::distinct()
+
   ratio_data <- meta_df |>
     dplyr::group_by(.data$Sample, .data$CellType) |>
     dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
-    # Fill missing combinations with 0 counts
     tidyr::complete(.data$Sample, .data$CellType, fill = list(n = 0)) |>
-    # Re-attach Group information
     dplyr::left_join(sample_info, by = "Sample") |>
-    # Calculate Ratio
     dplyr::group_by(.data$Sample) |>
     dplyr::mutate(Ratio = .data$n / sum(.data$n)) |>
     dplyr::ungroup()
 
-  # 3. Color Palette Logic (Standard 15 colors)
-  n_groups <- length(unique(ratio_data$Group))
-
+  # --- 3. 智能配色 ---
+  groups <- unique(ratio_data$Group)
+  n_groups <- length(groups)
   if (is.null(palette)) {
-    default_pal <- c(
-      "#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F",
-      "#8491B4", "#91D1C2", "#DC0000", "#7E6148", "#B09C85",
-      "#f47c7c", "#aadea7", "#f7f494", "#72ccff", "#c999ff"
-    )
-    if (n_groups > length(default_pal)) {
-      palette <- scales::hue_pal()(n_groups)
-    } else {
-      palette <- default_pal[1:n_groups]
-    }
-  } else {
-    # Handle user palette recycling
-    if (length(palette) < n_groups) palette <- rep(palette, length.out = n_groups)
+    # 更加柔和且区分度高的出版级配色
+    default_pal <- c("#EE6677", "#4477AA", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB")
+    palette <- if (n_groups > length(default_pal)) scales::hue_pal()(n_groups) else default_pal[1:n_groups]
   }
 
-  # 4. Plotting
+  # --- 4. 绘图 (美化核心) ---
   p <- ggplot2::ggplot(ratio_data, ggplot2::aes(x = .data$CellType, y = .data$Ratio, fill = .data$Group)) +
 
-    # Boxplot
+    # 箱线图 (黑色边框，增强对比度)
     ggplot2::geom_boxplot(
       outlier.shape = NA,
       alpha = 0.8,
       width = box_width,
+      color = "black", # 黑色边框更专业
+      size = 0.4,      # 边框线条粗细
       position = ggplot2::position_dodge(width = 0.8)
     ) +
 
-    # Jitter Points
+    # 散点 (带黑色描边，增加质感)
     ggplot2::geom_jitter(
-      ggplot2::aes(color = .data$Group),
-      position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+      ggplot2::aes(fill = .data$Group), # 用 fill 而不是 color，配合 shape=21 实现描边点
+      position = ggplot2::position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
       size = pt_size,
-      alpha = 0.8,
+      shape = 21,      # 空心圆，可填充颜色
+      color = "black", # 点的边框颜色
+      stroke = 0.3,    # 点的边框粗细
+      alpha = 0.9,
       show.legend = FALSE
     ) +
 
-    # Aesthetics
+    # 标尺与轴
     ggplot2::scale_fill_manual(values = palette) +
-    ggplot2::scale_color_manual(values = palette) +
-    ggplot2::scale_y_continuous(labels = scales::percent) +
+    # 增加顶部 20% 留白，防止星星显示不全
+    ggplot2::scale_y_continuous(labels = scales::percent, expand = ggplot2::expansion(mult = c(0.05, 0.2))) +
+
+    # 主题美化
     ggplot2::theme_classic(base_size = base_size) +
     ggplot2::labs(x = NULL, y = "Cell Proportion", fill = group_col) +
     ggplot2::theme(
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black"),
-      axis.text.y = ggplot2::element_text(color = "black"),
-      legend.position = "top",
-      panel.grid.major.y = ggplot2::element_line(color = "grey90", linetype = "dashed")
+      # 坐标轴文字纯黑
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black", face = "plain"),
+      axis.text.y = ggplot2::element_text(color = "black", face = "plain"),
+      axis.line = ggplot2::element_line(color = "black", linewidth = 0.6),
+      axis.ticks = ggplot2::element_line(color = "black"),
+
+      # 图例控制 (响应参数)
+      legend.position = legend_position,
+      legend.title = ggplot2::element_text(face = "bold"),
+      legend.background = ggplot2::element_blank(),
+
+      # 网格线 (横向虚线辅助阅读)
+      panel.grid.major.y = ggplot2::element_line(color = "grey92", linetype = "dashed")
     )
 
-  # 5. Statistical Tests
+  # --- 5. 统计检验 ---
   tryCatch({
-    if (is.null(comparisons)) {
-      # Global Test (e.g., ANOVA/Kruskal if >2 groups, or basic comparison)
+    if (!is.null(ref_group)) {
+      # 模式 A: 参考组对比 (打星号)
       p <- p + ggpubr::stat_compare_means(
         ggplot2::aes(group = .data$Group),
         method = sign_method,
         label = sign_label,
-        hide.ns = TRUE,
-        label.y.npc = "top" # Auto position at top
+        ref.group = ref_group,
+        hide.ns = hide_ns,
+        label.y.npc = "top",
+        vjust = 0.5
       )
     } else {
-      # Pairwise Comparisons (Specified by user)
+      # 模式 B: 自动判断 (2组=Wilcox, >2组=Kruskal)
       p <- p + ggpubr::stat_compare_means(
-        mapping = ggplot2::aes(group = .data$Group),
-        comparisons = comparisons,
+        ggplot2::aes(group = .data$Group),
         method = sign_method,
-        label = sign_label,
-        hide.ns = TRUE,
-        symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
-                           symbols = c("****", "***", "**", "*", "ns"))
+        label = if (n_groups > 2) "p.format" else sign_label,
+        hide.ns = hide_ns,
+        label.y.npc = "top",
+        vjust = -0.5
       )
     }
-  }, error = function(e) {
-    message("⚠️ Statistical annotation failed. Returning plot without stats.")
-    message(e$message)
-  })
+  }, error = function(e) message("⚠️ Stats failed: ", e$message))
 
   return(p)
 }
-
 
 # =============== Ro/e 分布偏好  ================
 # =============== 5.scVisRoePlot  ================

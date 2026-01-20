@@ -2,7 +2,7 @@
 % Please edit documentation in R/3.scRNA-Viz.R
 \name{scVisVlnPlot}
 \alias{scVisVlnPlot}
-\title{scVis: Publication-Ready Violin Plot with Stats (Robust)}
+\title{scVis: Robust Violin Plot (v4/v5 Compatible)}
 \usage{
 scVisVlnPlot(
   sce,
@@ -10,14 +10,13 @@ scVisVlnPlot(
   group_col = NULL,
   comparisons = NULL,
   palette = NULL,
-  pt_size = 0,
+  pt_size = 0.1,
   ncol = NULL,
   base_size = 14,
   sign_method = "wilcox.test",
   sign_label = "p.signif",
-  hide_ns = TRUE,
-  step_increase = 0.1,
-  ...
+  hide_ns = FALSE,
+  step_increase = 0.1
 )
 }
 \arguments{
@@ -27,36 +26,34 @@ scVisVlnPlot(
 
 \item{group_col}{String. Column name to group cells by. If NULL (default), uses active Idents.}
 
-\item{comparisons}{List of vectors or a single vector. Pairs of groups to compare (e.g., \code{c("Treat", "Ctrl")}).}
+\item{comparisons}{Vector (e.g. c("A","B")) or List of vectors.}
 
-\item{palette}{Vector. Custom colors. Defaults to NPG style.}
+\item{palette}{Vector. Custom colors.}
 
-\item{pt_size}{Numeric. Size of the jitter points. Default 0.1.}
+\item{pt_size}{Numeric. Size of jitter points. Default 0.1.}
 
-\item{ncol}{Numeric. Number of columns.}
+\item{ncol}{Numeric. Number of columns for faceting.}
 
-\item{base_size}{Numeric. Base font size. Default 14.}
+\item{base_size}{Numeric. Base font size.}
 
-\item{sign_method}{String. "wilcox.test", "t.test", etc.}
+\item{sign_method}{String. "wilcox.test" or "t.test".}
 
 \item{sign_label}{String. "p.signif" or "p.format".}
 
-\item{hide_ns}{Logical. If TRUE, only displays significant comparisons.}
+\item{hide_ns}{Logical. Whether to hide non-significant results.}
 
-\item{step_increase}{Numeric. Spacing between stat brackets.}
-
-\item{...}{Additional arguments passed to \code{Seurat::VlnPlot}.}
+\item{step_increase}{Numeric. Spacing for stat brackets.}
 }
 \value{
-A patchwork ggplot object.
+A ggplot object (patchwork).
 }
 \description{
-A wrapper around \code{Seurat::VlnPlot} with smart grouping, auto-formatting, and crash-proof statistics.
-Automatically skips stats for groups with insufficient cells (<3) to prevent "not enough 'y' observations" errors.
+A version-agnostic violin plot function. Instead of wrapping Seurat::VlnPlot,
+it fetches data directly to ensure compatibility with Seurat v4 and v5 (BPCells/Layers).
 }
 \examples{
 \dontrun{
-  # Smart defaults: uses active Idents, auto-wraps comparisons
-  scVisVlnPlot(sce, features = "Gdf15", comparisons = c("Cluster1", "Cluster2"))
+  # Works for Seurat v4 and v5
+  scVisVlnPlot(sce, features = "Gdf15", comparisons = c("Endothelial", "Immune"))
 }
 }

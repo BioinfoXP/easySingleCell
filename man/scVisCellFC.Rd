@@ -9,8 +9,7 @@ scVisCellFC(
   group_col,
   celltype_col,
   comparisons,
-  palette = c("#00F672", "#C8A4F9", "#E64B35", "#FF00DB", "#4DBBD5", "#00A087",
-    "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148"),
+  palette = NULL,
   show_labels = TRUE,
   show_legend = FALSE,
   legend_position = "right",
@@ -26,9 +25,10 @@ scVisCellFC(
 
 \item{celltype_col}{String. Column name in \code{meta.data} for cell types (e.g., "cell_type").}
 
-\item{comparisons}{A list of vectors (e.g., \code{list(c("Case", "Ctrl"))}) OR a single vector (e.g., \code{c("Case", "Ctrl")}).}
+\item{comparisons}{A single vector (e.g., \code{c("Treat", "Ctrl")}) OR a list of vectors (e.g., \code{list(c("A", "B"), c("C", "D"))}).
+The first element is the Case (Numerator), the second is the Control (Denominator).}
 
-\item{palette}{Vector. Custom colors. Defaults to a vibrant 12-color palette.}
+\item{palette}{Vector. Custom colors. Can be a named vector (names = cell types) or a simple vector of hex codes.}
 
 \item{show_labels}{Logical. Whether to show text labels on bars. Default TRUE.}
 
@@ -47,50 +47,15 @@ A ggplot object.
 }
 \description{
 Calculates and visualizes the Log2 Fold Change of cell type proportions between groups.
-Features flexible controls for labels, legends, and layout. Optimized for publication-quality figures.
-Uses base R pipe (R >= 4.1.0).
+Optimized for flexibility, supporting both single vector comparisons and list of comparisons.
 }
 \examples{
 \dontrun{
-  library(Seurat)
-  library(ggplot2)
+   # 1. Simple Vector Input (Case vs Control)
+   scVisCellFC(sce, "Group", "CellType", comparisons = c("Treat", "Ctrl"))
 
-  # --- 1. Create Mock Data ---
-  set.seed(123)
-  n_cells <- 300
-  counts <- matrix(rnorm(n_cells * 10), ncol = n_cells)
-  colnames(counts) <- paste0("Cell_", 1:n_cells)
-  rownames(counts) <- paste0("Gene_", 1:10)
-
-  sce <- CreateSeuratObject(counts = counts)
-  sce$Group <- sample(c("Control", "Treat_A", "Treat_B"), n_cells, replace = TRUE)
-  sce$CellType <- sample(c("T_cells", "B_cells", "Myeloid", "NK", "Fibro"), n_cells, replace = TRUE)
-
-  # Simulate enrichment of Myeloid in Treat_A
-  sce$CellType[sce$Group == "Treat_A" & runif(n_cells) > 0.6] <- "Myeloid"
-
-  # --- 2. Basic Usage (Vector Input) ---
-  p1 <- scVisCellFC(
-    sce = sce,
-    group_col = "Group",
-    celltype_col = "CellType",
-    comparisons = c("Treat_A", "Control"), # Smart vector handling
-    show_labels = TRUE,
-    show_legend = FALSE
-  )
-  print(p1)
-
-  # --- 3. Advanced Usage (List Input + Legend Customization) ---
-  p2 <- scVisCellFC(
-    sce = sce,
-    group_col = "Group",
-    celltype_col = "CellType",
-    comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control")),
-    show_labels = FALSE,        # Turn off text labels
-    show_legend = TRUE,         # Turn on legend
-    legend_position = "bottom", # Move legend to bottom
-    base_size = 16
-  )
-  print(p2)
+   # 2. List Input (Multiple Comparisons)
+   scVisCellFC(sce, "Group", "CellType",
+               comparisons = list(c("TreatA", "Ctrl"), c("TreatB", "Ctrl")))
 }
 }

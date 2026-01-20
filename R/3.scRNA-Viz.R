@@ -706,14 +706,14 @@ scVisRoePlot <- function(sce,
 # =============== 6.scVisCellFC  ================
 #' @title scVis: Cell Type Log2FC Plot
 #' @description Calculates and visualizes the Log2 Fold Change of cell type proportions between groups.
-#' Features flexible controls for labels, legends, and layout. Optimized for publication-quality figures.
-#' Uses base R pipe (R >= 4.1.0).
+#' Optimized for flexibility, supporting both single vector comparisons and list of comparisons.
 #'
 #' @param sce A Seurat object.
 #' @param group_col String. Column name in \code{meta.data} for grouping (e.g., "group").
 #' @param celltype_col String. Column name in \code{meta.data} for cell types (e.g., "cell_type").
-#' @param comparisons A list of vectors (e.g., \code{list(c("Case", "Ctrl"))}) OR a single vector (e.g., \code{c("Case", "Ctrl")}).
-#' @param palette Vector. Custom colors. Defaults to a vibrant 12-color palette.
+#' @param comparisons A single vector (e.g., \code{c("Treat", "Ctrl")}) OR a list of vectors (e.g., \code{list(c("A", "B"), c("C", "D"))}).
+#' The first element is the Case (Numerator), the second is the Control (Denominator).
+#' @param palette Vector. Custom colors. Can be a named vector (names = cell types) or a simple vector of hex codes.
 #' @param show_labels Logical. Whether to show text labels on bars. Default TRUE.
 #' @param show_legend Logical. Whether to show the legend. Default FALSE.
 #' @param legend_position String. Position of legend ("right", "top", "bottom", "left"). Default "right".
@@ -734,52 +734,18 @@ scVisRoePlot <- function(sce,
 #'
 #' @examples
 #' \dontrun{
-#'   library(Seurat)
-#'   library(ggplot2)
+#'    # 1. Simple Vector Input (Case vs Control)
+#'    scVisCellFC(sce, "Group", "CellType", comparisons = c("Treat", "Ctrl"))
 #'
-#'   # --- 1. Create Mock Data ---
-#'   set.seed(123)
-#'   n_cells <- 300
-#'   counts <- matrix(rnorm(n_cells * 10), ncol = n_cells)
-#'   colnames(counts) <- paste0("Cell_", 1:n_cells)
-#'   rownames(counts) <- paste0("Gene_", 1:10)
-#'
-#'   sce <- CreateSeuratObject(counts = counts)
-#'   sce$Group <- sample(c("Control", "Treat_A", "Treat_B"), n_cells, replace = TRUE)
-#'   sce$CellType <- sample(c("T_cells", "B_cells", "Myeloid", "NK", "Fibro"), n_cells, replace = TRUE)
-#'
-#'   # Simulate enrichment of Myeloid in Treat_A
-#'   sce$CellType[sce$Group == "Treat_A" & runif(n_cells) > 0.6] <- "Myeloid"
-#'
-#'   # --- 2. Basic Usage (Vector Input) ---
-#'   p1 <- scVisCellFC(
-#'     sce = sce,
-#'     group_col = "Group",
-#'     celltype_col = "CellType",
-#'     comparisons = c("Treat_A", "Control"), # Smart vector handling
-#'     show_labels = TRUE,
-#'     show_legend = FALSE
-#'   )
-#'   print(p1)
-#'
-#'   # --- 3. Advanced Usage (List Input + Legend Customization) ---
-#'   p2 <- scVisCellFC(
-#'     sce = sce,
-#'     group_col = "Group",
-#'     celltype_col = "CellType",
-#'     comparisons = list(c("Treat_A", "Control"), c("Treat_B", "Control")),
-#'     show_labels = FALSE,        # Turn off text labels
-#'     show_legend = TRUE,         # Turn on legend
-#'     legend_position = "bottom", # Move legend to bottom
-#'     base_size = 16
-#'   )
-#'   print(p2)
+#'    # 2. List Input (Multiple Comparisons)
+#'    scVisCellFC(sce, "Group", "CellType",
+#'                comparisons = list(c("TreatA", "Ctrl"), c("TreatB", "Ctrl")))
 #' }
 scVisCellFC <- function(sce,
                         group_col,
                         celltype_col,
                         comparisons,
-                        palette = c("#00F672","#C8A4F9","#E64B35","#FF00DB","#4DBBD5", "#00A087", "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148"),
+                        palette = NULL,
                         show_labels = TRUE,
                         show_legend = FALSE,
                         legend_position = "right",
@@ -787,27 +753,47 @@ scVisCellFC <- function(sce,
                         base_size = 14,
                         bar_width = 0.7) {
 
-  # 1. Input Validation
+  # --- 1. Input Validation & Standardization ---
+
   if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
 
-  # Smart Comparison Handling (Vector -> List)
-  if (is.atomic(comparisons) && !is.list(comparisons)) {
-    if (length(comparisons) != 2) {
-      stop("For a single comparison, provide a vector of length 2: c('Case', 'Control').")
-    }
-    comparisons <- list(comparisons)
+  # Check if columns exist
+  if (!all(c(group_col, celltype_col) %in% colnames(sce@meta.data))) {
+    stop(paste0("❌ Columns '", group_col, "' or '", celltype_col, "' not found in meta.data."))
   }
 
-  # Secure Data Fetching
-  meta <- tryCatch({
-    Seurat::FetchData(sce, vars = c(group_col, celltype_col))
-  }, error = function(e) {
-    stop(paste0("❌ Columns not found: '", group_col, "' or '", celltype_col, "'. Please check meta.data."))
-  })
+  # Smart Comparisons Handling: Normalize to a list
+  # Logic: If it's not a list, wrap it. If it is a list, check contents.
+  if (!is.list(comparisons)) {
+    if (length(comparisons) != 2) {
+      stop("❌ For a single comparison, 'comparisons' must be a vector of length 2: c('Case', 'Control').")
+    }
+    comparisons <- list(comparisons)
+  } else {
+    # Check if any element in the list is not length 2
+    if (any(sapply(comparisons, length) != 2)) {
+      stop("❌ Every element in the 'comparisons' list must be a vector of length 2.")
+    }
+  }
+
+  # Validate Groups Exist in Data
+  available_groups <- unique(sce@meta.data[[group_col]])
+  all_requested_groups <- unique(unlist(comparisons))
+  missing_groups <- setdiff(all_requested_groups, available_groups)
+
+  if (length(missing_groups) > 0) {
+    stop(paste0("❌ The following groups defined in 'comparisons' are missing from meta.data: ",
+                paste(missing_groups, collapse = ", ")))
+  }
+
+  # --- 2. Data Preparation ---
+
+  # Fetch Data safely
+  meta <- Seurat::FetchData(sce, vars = c(group_col, celltype_col))
   colnames(meta) <- c("group", "celltype")
   meta$celltype <- as.character(meta$celltype)
 
-  # 2. Calculate Proportions
+  # Calculate Proportions (with 0-filling)
   props <- meta |>
     dplyr::group_by(.data$group, .data$celltype) |>
     dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
@@ -816,113 +802,110 @@ scVisCellFC <- function(sce,
     dplyr::ungroup() |>
     tidyr::complete(.data$group, .data$celltype, fill = list(n = 0, freq = 0))
 
-  # 3. Calculate Log2FC Loop
+  # --- 3. Calculate Log2FC ---
+
   res_list <- list()
+  pseudo_count <- 1e-4 # Avoid division by zero
 
   for (pair in comparisons) {
     g1 <- pair[1] # Case
     g2 <- pair[2] # Control
 
-    if (!all(c(g1, g2) %in% unique(meta$group))) {
-      warning(paste0("⚠️ Groups '", g1, "' or '", g2, "' not found. Skipping."))
-      next
-    }
-
-    d1 <- props |>
-      dplyr::filter(.data$group == g1) |>
-      dplyr::select("celltype", "freq") |>
-      dplyr::rename(v1 = "freq")
-
-    d2 <- props |>
-      dplyr::filter(.data$group == g2) |>
-      dplyr::select("celltype", "freq") |>
-      dplyr::rename(v2 = "freq")
+    d1 <- props |> dplyr::filter(.data$group == g1) |> dplyr::select("celltype", freq1 = "freq")
+    d2 <- props |> dplyr::filter(.data$group == g2) |> dplyr::select("celltype", freq2 = "freq")
 
     merged <- dplyr::full_join(d1, d2, by = "celltype") |>
       dplyr::mutate(
-        v1_adj = .data$v1 + 1e-4,
-        v2_adj = .data$v2 + 1e-4,
-        log2fc = log2(.data$v1_adj / .data$v2_adj),
+        freq1 = ifelse(is.na(.data$freq1), 0, .data$freq1),
+        freq2 = ifelse(is.na(.data$freq2), 0, .data$freq2),
+        # Log2FC Calculation
+        log2fc = log2((.data$freq1 + pseudo_count) / (.data$freq2 + pseudo_count)),
         comp_name = paste0(g1, " vs. ", g2)
       )
 
     res_list[[paste(g1, g2)]] <- merged
   }
 
-  if (length(res_list) == 0) stop("❌ No valid comparisons generated.")
   plot_data <- dplyr::bind_rows(res_list)
 
-  # 4. Color Palette
+  # --- 4. Color Palette Handling ---
+
   unique_cells <- sort(unique(plot_data$celltype))
   n_colors <- length(unique_cells)
+  default_palette <- c("#00F672","#C8A4F9","#E64B35","#FF00DB","#4DBBD5", "#00A087",
+                       "#3C5488", "#F39B7F", "#8491B4", "#91D1C2", "#DC0000", "#7E6148")
 
   if (is.null(palette)) {
-    my_colors <- scales::hue_pal()(n_colors)
-  } else if (is.null(names(palette))) {
-    if (length(palette) < n_colors) palette <- rep(palette, length.out = n_colors)
-    my_colors <- palette[1:n_colors]
+    # Use default extended palette or hue_pal if too many cells
+    if (n_colors > length(default_palette)) {
+      my_colors <- scales::hue_pal()(n_colors)
+    } else {
+      my_colors <- default_palette[1:n_colors]
+    }
+    names(my_colors) <- unique_cells
   } else {
-    my_colors <- palette
+    # If user provides palette
+    if (!is.null(names(palette))) {
+      # Named vector: strictly match
+      my_colors <- palette
+    } else {
+      # Unnamed vector: interpolate or subset
+      if (length(palette) < n_colors) {
+        warning("Provided palette has fewer colors than cell types. Recycling colors.")
+        palette <- rep(palette, length.out = n_colors)
+      }
+      my_colors <- palette[1:n_colors]
+      names(my_colors) <- unique_cells
+    }
   }
-  names(my_colors) <- unique_cells
 
-  # Determine final legend position
-  final_legend_pos <- if (show_legend) legend_position else "none"
+  # --- 5. Plotting ---
 
-  # 5. Plotting
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = stats::reorder(.data$celltype, -.data$log2fc),
-                                               y = .data$log2fc,
-                                               fill = .data$celltype)) +
+  p <- ggplot2::ggplot(plot_data,
+                       ggplot2::aes(x = stats::reorder(.data$celltype, -.data$log2fc),
+                                    y = .data$log2fc,
+                                    fill = .data$celltype)) +
 
-    # Zero line (Behind bars)
+    # Zero Line
     ggplot2::geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
 
     # Bars
     ggplot2::geom_col(color = "black", width = bar_width, linewidth = 0.4) +
 
-    # Faceting
+    # Faceting (Only if multiple comparisons, but safe to always use)
     ggplot2::facet_wrap(~comp_name, scales = "free", ncol = 2) +
 
     # Colors
     ggplot2::scale_fill_manual(values = my_colors) +
 
-    # Axis expansion (Give room for labels)
-    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = 0.15)) +
+    # Axis Expansion (15% padding for labels)
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = 0.2)) +
 
-    # Visual Theme
+    # Theme
     ggplot2::theme_classic(base_size = base_size) +
     ggplot2::labs(y = "Log2 Fold Change", x = NULL) +
-
     ggplot2::theme(
-      # Clean X Axis (Remove line and text)
       axis.line.x = ggplot2::element_blank(),
       axis.ticks.x = ggplot2::element_blank(),
       axis.text.x = ggplot2::element_blank(),
-
-      # Strong Y Axis
       axis.line.y = ggplot2::element_line(color = "black", linewidth = 0.8),
       axis.ticks.y = ggplot2::element_line(color = "black", linewidth = 0.8),
       axis.text.y = ggplot2::element_text(color = "black", size = base_size),
-      axis.title.y = ggplot2::element_text(color = "black", size = base_size + 1, face = "plain"),
-
-      # Clean Background
+      axis.title.y = ggplot2::element_text(color = "black", size = base_size + 1),
       panel.grid = ggplot2::element_blank(),
       strip.background = ggplot2::element_blank(),
-      strip.text = ggplot2::element_text(size = base_size * 1.1, face = "plain", color = "black"),
-
-      # Legend Control
-      legend.position = final_legend_pos
+      strip.text = ggplot2::element_text(size = base_size * 1.1, face = "bold", color = "black"),
+      legend.position = if (show_legend) legend_position else "none"
     )
 
-  # 6. Label Handling (Conditional)
+  # --- 6. Add Labels ---
   if (show_labels) {
-    max_val <- max(abs(plot_data$log2fc), na.rm = TRUE)
-    offset <- max_val * 0.05
-
+    # Calculate smart offset relative to bar height direction
     p <- p + ggplot2::geom_text(
-      ggplot2::aes(label = .data$celltype,
-                   y = ifelse(.data$log2fc >= 0, .data$log2fc + offset, .data$log2fc - offset),
-                   vjust = ifelse(.data$log2fc >= 0, 0, 1)),
+      ggplot2::aes(
+        label = .data$celltype,
+        vjust = ifelse(.data$log2fc >= 0, -0.5, 1.5) # Push up for pos, down for neg
+      ),
       size = label_size,
       color = "black"
     )

@@ -2,21 +2,22 @@
 % Please edit documentation in R/3.scRNA-Viz.R
 \name{scVisVlnPlot}
 \alias{scVisVlnPlot}
-\title{scVis: Robust Violin Plot (v4/v5 Compatible)}
+\title{scVis: Intelligent VlnPlot (Split-Stats & Legend Support)}
 \usage{
 scVisVlnPlot(
   sce,
   features,
   group_col = NULL,
+  split_by = NULL,
   comparisons = NULL,
   palette = NULL,
   pt_size = 0.1,
+  legend_position = "right",
   ncol = NULL,
-  base_size = 14,
   sign_method = "wilcox.test",
   sign_label = "p.signif",
   hide_ns = FALSE,
-  step_increase = 0.1
+  ...
 )
 }
 \arguments{
@@ -24,36 +25,40 @@ scVisVlnPlot(
 
 \item{features}{Vector of feature names.}
 
-\item{group_col}{String. Column name to group cells by. If NULL (default), uses active Idents.}
+\item{group_col}{String. X-axis grouping (e.g., cell type).}
 
-\item{comparisons}{Vector (e.g. c("A","B")) or List of vectors.}
+\item{split_by}{String. Column to split/fill violins by (e.g., "Condition").}
+
+\item{comparisons}{Vector/List. Pairs to compare. Can be groups (X-axis) OR conditions (Split-by).}
 
 \item{palette}{Vector. Custom colors.}
 
-\item{pt_size}{Numeric. Size of jitter points. Default 0.1.}
+\item{pt_size}{Numeric. Size of jitter points.}
 
-\item{ncol}{Numeric. Number of columns for faceting.}
+\item{legend_position}{String. "right", "top", "bottom", "none", etc.}
 
-\item{base_size}{Numeric. Base font size.}
+\item{ncol}{Numeric. Number of columns.}
 
 \item{sign_method}{String. "wilcox.test" or "t.test".}
 
-\item{sign_label}{String. "p.signif" or "p.format".}
+\item{sign_label}{String. "p.signif" (stars) or "p.format" (numbers).}
 
-\item{hide_ns}{Logical. Whether to hide non-significant results.}
+\item{hide_ns}{Logical. Hide non-significant results.}
 
-\item{step_increase}{Numeric. Spacing for stat brackets.}
+\item{...}{Additional arguments (ignored safely).}
 }
 \value{
-A ggplot object (patchwork).
+A patchwork ggplot object.
 }
 \description{
-A version-agnostic violin plot function. Instead of wrapping Seurat::VlnPlot,
-it fetches data directly to ensure compatibility with Seurat v4 and v5 (BPCells/Layers).
+A robust violin plot builder that handles Seurat V4/V5 data.
+Features "Smart Stats": Automatically detects if you want to compare X-axis groups
+OR split-by groups (e.g., Control vs Disease within cell types).
 }
 \examples{
 \dontrun{
-  # Works for Seurat v4 and v5
-  scVisVlnPlot(sce, features = "Gdf15", comparisons = c("Endothelial", "Immune"))
+  # 1. Split Comparison (Control vs PCOS within each cell type)
+  scVisVlnPlot(sce, "Gdf15", group_col = "celltype", split_by = "group",
+               comparisons = c("Control", "PCOS"), legend_position = "top")
 }
 }

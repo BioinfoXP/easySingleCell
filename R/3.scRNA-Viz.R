@@ -1277,246 +1277,210 @@ scVisCellRatio <- function(sce,
 
 # ========= scVisVlnPlot =========
 # ========= 9. scVisVlnPlot =========
-#' @title scVis: Robust Violin Plot (v4/v5 Compatible)
-#' @description A version-agnostic violin plot function. Instead of wrapping Seurat::VlnPlot,
-#' it fetches data directly to ensure compatibility with Seurat v4 and v5 (BPCells/Layers).
+#' @title scVis: Intelligent VlnPlot (Split-Stats & Legend Support)
+#' @description A robust violin plot builder that handles Seurat V4/V5 data.
+#' Features "Smart Stats": Automatically detects if you want to compare X-axis groups
+#' OR split-by groups (e.g., Control vs Disease within cell types).
 #'
 #' @param sce A Seurat object.
 #' @param features Vector of feature names.
-#' @param group_col String. Column name to group cells by. If NULL (default), uses active Idents.
-#' @param comparisons Vector (e.g. c("A","B")) or List of vectors.
+#' @param group_col String. X-axis grouping (e.g., cell type).
+#' @param split_by String. Column to split/fill violins by (e.g., "Condition").
+#' @param comparisons Vector/List. Pairs to compare. Can be groups (X-axis) OR conditions (Split-by).
 #' @param palette Vector. Custom colors.
-#' @param pt_size Numeric. Size of jitter points. Default 0.1.
-#' @param ncol Numeric. Number of columns for faceting.
-#' @param base_size Numeric. Base font size.
+#' @param pt_size Numeric. Size of jitter points.
+#' @param legend_position String. "right", "top", "bottom", "none", etc.
+#' @param ncol Numeric. Number of columns.
 #' @param sign_method String. "wilcox.test" or "t.test".
-#' @param sign_label String. "p.signif" or "p.format".
-#' @param hide_ns Logical. Whether to hide non-significant results.
-#' @param step_increase Numeric. Spacing for stat brackets.
+#' @param sign_label String. "p.signif" (stars) or "p.format" (numbers).
+#' @param hide_ns Logical. Hide non-significant results.
+#' @param ... Additional arguments (ignored safely).
 #'
-#' @return A ggplot object (patchwork).
+#' @return A patchwork ggplot object.
 #' @export
 #'
-#' @importFrom Seurat FetchData Idents DefaultAssay
-#' @importFrom ggplot2 ggplot aes geom_violin geom_jitter stat_summary theme_classic labs theme element_text element_blank scale_fill_manual scale_y_continuous expansion facet_wrap
+#' @importFrom Seurat FetchData Idents
+#' @importFrom ggplot2 ggplot aes geom_violin geom_point stat_summary theme_classic labs scale_fill_manual scale_y_continuous expansion position_jitterdodge position_dodge theme element_text
 #' @importFrom ggpubr stat_compare_means compare_means
-#' @importFrom dplyr filter mutate group_by
 #' @importFrom patchwork wrap_plots
 #' @importFrom rlang .data
 #'
 #' @examples
 #' \dontrun{
-#'   # Works for Seurat v4 and v5
-#'   scVisVlnPlot(sce, features = "Gdf15", comparisons = c("Endothelial", "Immune"))
+#'   # 1. Split Comparison (Control vs PCOS within each cell type)
+#'   scVisVlnPlot(sce, "Gdf15", group_col = "celltype", split_by = "group",
+#'                comparisons = c("Control", "PCOS"), legend_position = "top")
 #' }
 scVisVlnPlot <- function(sce,
                          features,
                          group_col = NULL,
+                         split_by = NULL,
                          comparisons = NULL,
                          palette = NULL,
                          pt_size = 0.1,
+                         legend_position = "right",
                          ncol = NULL,
-                         base_size = 14,
                          sign_method = "wilcox.test",
                          sign_label = "p.signif",
                          hide_ns = FALSE,
-                         step_increase = 0.1) {
+                         ...) {
 
-  # --- 1. Environmental Checks ---
-  if (missing(sce) || is.null(sce)) stop("❌ Input 'sce' is missing or NULL.")
-  if (!inherits(sce, "Seurat")) stop("Input must be a Seurat object.")
+  # --- 1. Catch split.by in ... ---
+  args <- list(...)
+  if (is.null(split_by) && "split.by" %in% names(args)) split_by <- args$split.by
 
-  # Ensure ggpubr is available
-  if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' is required.")
+  # --- 2. Validation ---
+  if (missing(sce) || is.null(sce)) stop("❌ Input 'sce' is missing.")
+  if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' required.")
 
-  # --- 2. Feature & Group Validation ---
-
-  # Determine Grouping
+  # Set Group Column
   if (is.null(group_col)) {
-    # If no group_col provided, create a temporary column from Idents
-    sce$scVis_temp_ident <- Seurat::Idents(sce)
-    group_col <- "scVis_temp_ident"
-  } else {
-    if (!group_col %in% colnames(sce@meta.data)) {
-      stop(paste0("❌ Group column '", group_col, "' not found in meta.data."))
-    }
+    sce$scVis_ident <- Seurat::Idents(sce)
+    group_col <- "scVis_ident"
+  } else if (!group_col %in% colnames(sce@meta.data)) {
+    stop(paste0("❌ Group column '", group_col, "' not found."))
   }
 
-  # Validate Features (Robust FetchData check)
-  # This works for both v4 (Assay) and v5 (Layers)
-  available_data <- tryCatch({
-    # Fetch just the first requested feature to test connectivity
-    test_dat <- Seurat::FetchData(sce, vars = features[1], cells = colnames(sce)[1:5])
-    TRUE
-  }, error = function(e) FALSE)
+  # Set Split Column & Colors
+  color_by <- if (!is.null(split_by)) split_by else group_col
+  if (!is.null(split_by) && !split_by %in% colnames(sce@meta.data)) stop(paste0("❌ Split column '", split_by, "' not found."))
 
-  if (!available_data) {
-    # Try finding alternative names (e.g. underscore vs dash)
-    all_rownames <- rownames(sce)
-    valid_features <- c()
-    for(ft in features) {
-      if(ft %in% all_rownames) {
-        valid_features <- c(valid_features, ft)
-      } else {
-        ft_alt <- gsub("_", "-", ft)
-        if(ft_alt %in% all_rownames) {
-          valid_features <- c(valid_features, ft_alt)
-        } else {
-          warning(paste("⚠️ Feature not found:", ft))
-        }
-      }
-    }
-    features <- valid_features
-  }
-
-  if (length(features) == 0) stop("❌ No valid features found in the Seurat object.")
-
-  # --- 3. Comparison Normalization ---
-  if (!is.null(comparisons)) {
-    if (is.atomic(comparisons) && !is.list(comparisons)) {
-      if (length(comparisons) != 2) stop("Comparisons vector must be length 2 (e.g. c('A', 'B')).")
-      comparisons <- list(comparisons)
-    }
-  }
-
-  # --- 4. Color Palette ---
-  groups <- unique(sce@meta.data[[group_col]])
-  n_groups <- length(groups)
-
+  # Palette Logic
+  unique_colors <- unique(sce@meta.data[[color_by]])
+  n_colors <- length(unique_colors)
   if (is.null(palette)) {
-    default_pal <- c("#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F",
-                     "#8491B4", "#91D1C2", "#DC0000", "#7E6148", "#B09C85")
-    if (n_groups > length(default_pal)) {
-      palette <- scales::hue_pal()(n_groups)
-    } else {
-      palette <- default_pal[1:n_groups]
-    }
+    default_pal <- c("#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F", "#8491B4", "#91D1C2")
+    palette <- if (n_colors > length(default_pal)) scales::hue_pal()(n_colors) else default_pal[1:n_colors]
   }
-  names(palette) <- groups # Name vectors are safer
+  if (is.null(names(palette))) names(palette) <- unique_colors[1:length(palette)]
 
-  # --- 5. Main Plotting Loop ---
+  # --- 3. Comparisons Pre-processing ---
+  # Normalize comparisons to list
+  if (!is.null(comparisons) && is.atomic(comparisons) && !is.list(comparisons)) {
+    comparisons <- list(comparisons)
+  }
 
+  # --- 4. Plot Loop ---
   plot_list <- list()
 
   for (gene in features) {
+    # Fetch Data (Crash-Proof)
+    fetch_vars <- c(gene, group_col, split_by)
+    plot_data <- tryCatch({ Seurat::FetchData(sce, vars = fetch_vars) }, error = function(e) NULL)
 
-    # A. Fetch Data Manually (The "Gold Standard" for v4/v5 compatibility)
-    # We explicitly ask for the gene and the group column
-    plot_data <- tryCatch({
-      Seurat::FetchData(sce, vars = c(gene, group_col))
-    }, error = function(e) {
-      warning(paste("Could not fetch data for", gene))
-      return(NULL)
-    })
+    if (is.null(plot_data)) { message(paste("⚠️ Skip:", gene)); next }
 
-    if (is.null(plot_data)) next
+    # Normalize Columns
+    colnames(plot_data)[1] <- "expression"
+    colnames(plot_data)[2] <- "group"
+    if (!is.null(split_by)) colnames(plot_data)[3] <- "split"
 
-    # Rename columns to standard names for ggplot
-    colnames(plot_data) <- c("expression", "group")
-    plot_data$group <- as.factor(plot_data$group)
-
-    # Filter out infinite/NA values just in case
     plot_data <- plot_data[is.finite(plot_data$expression), ]
+    plot_data$group <- as.factor(plot_data$group)
+    if (!is.null(split_by)) plot_data$split <- as.factor(plot_data$split)
 
-    # B. Comparison Logic (Safe Stats)
-    final_comparisons <- NULL
+    # --- Build Plot ---
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$group, y = .data$expression))
 
-    if (!is.null(comparisons)) {
-      group_counts <- table(plot_data$group)
-
-      valid_comparisons <- list()
-      for (pair in comparisons) {
-        g1 <- as.character(pair[1])
-        g2 <- as.character(pair[2])
-
-        # Check existence and count
-        n1 <- group_counts[g1]
-        n2 <- group_counts[g2]
-
-        if (!is.na(n1) && !is.na(n2) && n1 >= 3 && n2 >= 3) {
-          valid_comparisons <- c(valid_comparisons, list(c(g1, g2)))
-        }
+    if (!is.null(split_by)) {
+      p <- p + ggplot2::aes(fill = .data$split)
+      # Split Mode Jitter
+      if (pt_size > 0) {
+        p <- p + ggplot2::geom_point(position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.9),
+                                     size = pt_size, alpha = 0.6, show.legend = FALSE)
       }
-
-      # Filter for significant if needed
-      if (length(valid_comparisons) > 0) {
-        if (hide_ns) {
-          tryCatch({
-            # Pre-calc to see what is significant
-            stat_res <- ggpubr::compare_means(
-              formula = expression ~ group,
-              data = plot_data,
-              method = sign_method
-            )
-            sig_pairs <- stat_res[stat_res$p < 0.05, ]
-
-            # Keep only valid comparisons that are also significant
-            keep_idx <- c()
-            for (k in seq_along(valid_comparisons)) {
-              pair <- valid_comparisons[[k]]
-              is_sig <- any(
-                (sig_pairs$group1 == pair[1] & sig_pairs$group2 == pair[2]) |
-                  (sig_pairs$group1 == pair[2] & sig_pairs$group2 == pair[1])
-              )
-              if (is_sig) keep_idx <- c(keep_idx, k)
-            }
-            final_comparisons <- valid_comparisons[keep_idx]
-
-          }, error = function(e) warning("Stats pre-calculation failed"))
-        } else {
-          final_comparisons <- valid_comparisons
-        }
+    } else {
+      p <- p + ggplot2::aes(fill = .data$group)
+      # Normal Mode Jitter
+      if (pt_size > 0) {
+        p <- p + ggplot2::geom_jitter(width = 0.2, size = pt_size, alpha = 0.6, show.legend = FALSE)
       }
     }
 
-    # C. Construct GGPLOT Manually (Replicating VlnPlot style)
-    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$group, y = .data$expression, fill = .data$group)) +
-
-      # Violin
-      ggplot2::geom_violin(scale = "width", trim = TRUE, alpha = 0.8, size = 0.5, color = "black") +
-
-      # Jitter (if size > 0)
-      {if (pt_size > 0) ggplot2::geom_jitter(height = 0, width = 0.2, size = pt_size, color = "black", alpha = 0.7)} +
-
-      # Boxplot/Mean Point (Classic Seurat style uses a pointrange, we use boxplot or point)
-      ggplot2::stat_summary(fun.data = "mean_sdl", fun.args = list(mult = 1),
-                            geom = "pointrange", color = "black", size = 0.4,
-                            shape = 21, fill = "white") +
-
-      # Colors
+    p <- p +
+      ggplot2::geom_violin(scale = "width", trim = TRUE, alpha = 0.8,
+                           position = ggplot2::position_dodge(width = 0.9),
+                           size = 0.4, color = "black") +
+      ggplot2::stat_summary(fun = mean, geom = "point", shape = 21, size = 2, fill = "white", color = "black",
+                            position = ggplot2::position_dodge(width = 0.9), show.legend = FALSE) +
       ggplot2::scale_fill_manual(values = palette) +
-
-      # Theme
-      ggplot2::theme_classic(base_size = base_size) +
-      ggplot2::labs(title = gene, y = "Expression Level", x = NULL) +
+      ggplot2::theme_classic() +
+      ggplot2::labs(title = gene, x = NULL, y = "Expression", fill = if(!is.null(split_by)) split_by else group_col) +
       ggplot2::theme(
         plot.title = ggplot2::element_text(hjust = 0.5, face = "bold.italic"),
-        legend.position = "none",
-        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black")
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black"),
+        legend.position = legend_position # <--- Applies user setting
       )
 
-    # D. Add Stats
-    if (!is.null(final_comparisons) && length(final_comparisons) > 0) {
-      # Dynamic expansion based on number of comparisons
-      top_expansion <- 0.1 + (length(final_comparisons) * 0.1)
+    # --- Smart Statistics Logic ---
+    if (!is.null(comparisons)) {
 
-      p <- p +
-        ggpubr::stat_compare_means(
-          comparisons = final_comparisons,
+      # Determine Compare Mode: "Split" vs "Group"
+      mode <- "group" # Default
+      flat_comps <- unique(unlist(comparisons))
+
+      if (!is.null(split_by)) {
+        # Check if requested comparisons exist in the split column (e.g. "Control", "PCOS")
+        if (all(flat_comps %in% levels(plot_data$split))) {
+          mode <- "split"
+        }
+      }
+
+      if (mode == "split") {
+        # --- Mode A: Compare Splits (Control vs PCOS) ---
+        # Note: stat_compare_means with 'group' aesthetic works best with simple labels, not brackets, for dodged plots
+        p <- p + ggpubr::stat_compare_means(
+          ggplot2::aes(group = .data$split),
           method = sign_method,
-          label = sign_label,
-          step.increase = step_increase,
-          vjust = 0.5,
-          tip.length = 0.02
-        ) +
-        ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, top_expansion)))
-    }
+          label = sign_label, # e.g. "****"
+          label.y.npc = "top", # Put labels at top
+          hide.ns = hide_ns,
+          vjust = -0.5
+        )
+        # Increase Y limit slightly to fit labels
+        p <- p + ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.15)))
 
+      } else {
+        # --- Mode B: Compare Groups (Endothelial vs Immune) ---
+        # Existing logic for X-axis comparisons
+
+        valid_comps <- list()
+        counts <- table(plot_data$group)
+        for (pair in comparisons) {
+          # Ensure groups exist and have cells
+          if (all(pair %in% names(counts)) && all(counts[pair] >= 3)) {
+            valid_comps <- c(valid_comps, list(pair))
+          }
+        }
+
+        # Filter Significant
+        final_comps <- valid_comps
+        if (hide_ns && length(valid_comps) > 0) {
+          tryCatch({
+            # Simple pre-test
+            res <- ggpubr::compare_means(expression ~ group, data = plot_data, method = sign_method)
+            sig_res <- res[res$p < 0.05, ]
+            keep_idx <- which(sapply(valid_comps, function(pr) {
+              any((sig_res$group1 == pr[1] & sig_res$group2 == pr[2]) |
+                    (sig_res$group1 == pr[2] & sig_res$group2 == pr[1]))
+            }))
+            final_comps <- valid_comps[keep_idx]
+          }, error = function(e) NULL)
+        }
+
+        if (length(final_comps) > 0) {
+          p <- p + ggpubr::stat_compare_means(
+            comparisons = final_comps,
+            method = sign_method,
+            label = sign_label,
+            vjust = 0.5
+          ) + ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.1 + length(final_comps)*0.1)))
+        }
+      }
+    }
     plot_list[[gene]] <- p
   }
 
-  # --- 6. Return Wrapped Plots ---
   if (is.null(ncol)) ncol <- min(length(plot_list), 3)
   patchwork::wrap_plots(plot_list, ncol = ncol)
 }
-

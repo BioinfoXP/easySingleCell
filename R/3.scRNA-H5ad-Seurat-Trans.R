@@ -1,42 +1,20 @@
 # =============== readH5AD ================
-# =============== 1.readH5AD  ================
-#' @title Read H5AD file to Seurat Object
+#' @title Read H5AD file to Seurat Object (Fixed Version)
 #' @description Imports an AnnData object (.h5ad) and converts it to a Seurat object,
 #' preserving counts, metadata, and dimensionality reductions.
 #'
 #' @param file Path to the .h5ad file.
-#' @param use_raw Logical. If TRUE, tries to use `adata.raw.X` (raw counts) as the expression matrix.
-#' If `adata.raw` is not present, falls back to `adata.X`. Default is TRUE.
+#' @param data_type Character. Specifies which matrix to use:
+#'   - "X": uses `adata.X` (default).
+#'   - "raw": uses `adata.raw.X`.
+#'   - "counts", "logcounts", etc.: uses `adata.layers['name']`.
+#'   If the requested type is not found, it automatically falls back to "X".
 #' @param assay Name of the assay to create in Seurat object. Default is "RNA".
 #' @param verbose Logical. Print progress messages. Default is TRUE.
 #'
 #' @return A Seurat object.
 #' @export
-#' @importFrom Seurat CreateSeuratObject CreateDimReducObject
-#' @importFrom Matrix t
-#' @importFrom methods as
-#'
-#' @examples
-#' \dontrun{
-#'   library(Seurat)
-#'
-#'   # 1. 基础用法：读取 H5AD 文件
-#'   # 默认会自动寻找 raw counts
-#'   seu <- readH5AD("input_data/dataset.h5ad")
-#'   print(seu)
-#'
-#'   # 2. 强制读取 Normalized Data (adata.X)
-#'   # 如果你不需要 raw data，或者 h5ad 里没有 raw
-#'   seu_norm <- readH5AD("input_data/dataset.h5ad", use_raw = FALSE)
-#'
-#'   # 3. 指定 Assay 名称 (例如 Spatial)
-#'   seu_spatial <- readH5AD("input_data/spatial.h5ad", assay = "Spatial")
-#'
-#'   # 4. 验证降维结果
-#'   # 读取后可以直接画图
-#'   DimPlot(seu, reduction = "umap")
-#' }
-readH5AD <- function(file, use_raw = TRUE, assay = "RNA", verbose = TRUE) {
+readH5AD <- function(file, data_type = "X", assay = "RNA", verbose = TRUE) {
 
   # 1. 检查依赖与文件
   if (!requireNamespace("reticulate", quietly = TRUE)) {
@@ -48,26 +26,71 @@ readH5AD <- function(file, use_raw = TRUE, assay = "RNA", verbose = TRUE) {
 
   # 加载 Python 模块
   ad <- reticulate::import("anndata", convert = FALSE)
-  builtins <- reticulate::import_builtins(convert = FALSE) # 加载 Python 内置函数 list()
+  builtins <- reticulate::import_builtins(convert = FALSE) # 加载 Python 内置函数
 
   if (verbose) message("Reading H5AD file: ", file)
   adata <- ad$read_h5ad(file)
 
-  # 2. 确定使用 Raw 还是 X
-  has_raw <- !reticulate::py_is_null_xptr(adata$raw) && !is.null(adata$raw$X)
+  # ============================================================================
+  # 2. 确定读取的数据源 (X / raw / layers)
+  # ============================================================================
+  matrix_data <- NULL
+  var_names_py <- NULL
 
-  if (use_raw && has_raw) {
-    if (verbose) message("Using raw counts from adata.raw.X")
-    matrix_data <- adata$raw$X
-    var_names <- reticulate::py_to_r(adata$raw$var_names$to_list())
-  } else {
-    if (use_raw && verbose) message("adata.raw not found or empty. Falling back to adata.X")
-    if (!use_raw && verbose) message("Using matrix from adata.X (as requested)")
-    matrix_data <- adata$X
-    var_names <- reticulate::py_to_r(adata$var_names$to_list())
+  # --- 辅助函数：安全检查 raw 是否存在 ---
+  check_raw_exists <- function(a) {
+    tryCatch({
+      !is.null(a$raw) && !is.null(a$raw$X)
+    }, error = function(e) FALSE)
   }
 
+  # --- 情况 A: 请求 "raw" ---
+  if (data_type == "raw") {
+    if (check_raw_exists(adata)) {
+      if (verbose) message("Using raw counts from adata.raw.X")
+      matrix_data <- adata$raw$X
+      var_names_py <- adata$raw$var_names
+    } else {
+      warning("adata.raw not found or empty. Falling back to adata.X")
+      data_type <- "X" # 降级
+    }
+  }
+
+  # --- 情况 B: 请求 Layers (非 X 非 raw) ---
+  if (data_type != "X" && data_type != "raw") {
+    # 【修复重点】确保 layers_keys 是一个 R 向量
+    layers_keys <- tryCatch({
+      # 1. 先用 Python 的 list() 转换 dict_keys
+      keys_py <- builtins$list(adata$layers$keys())
+      # 2. 转为 R 对象
+      keys_r <- reticulate::py_to_r(keys_py)
+      # 3. 确保打平为向量 (unlist)
+      unlist(keys_r)
+    }, error = function(e) character(0))
+
+    if (data_type %in% layers_keys) {
+      if (verbose) message(sprintf("Using data from adata.layers['%s']", data_type))
+      matrix_data <- adata$layers$get(data_type)
+      var_names_py <- adata$var_names
+    } else {
+      # 如果 layers_keys 是 NULL，使用空字符避免打印报错
+      avail_keys <- if (is.null(layers_keys)) "None" else paste(layers_keys, collapse=", ")
+      warning(sprintf("Layer '%s' not found. Available: [%s]. Falling back to adata.X",
+                      data_type, avail_keys))
+      data_type <- "X" # 降级
+    }
+  }
+
+  # --- 情况 C: 请求 "X" (或回退到 X) ---
+  if (data_type == "X") {
+    if (verbose) message("Using matrix from adata.X")
+    matrix_data <- adata$X
+    var_names_py <- adata$var_names
+  }
+
+  # ============================================================================
   # 3. 矩阵转换 (内存安全)
+  # ============================================================================
   if (verbose) message("Converting matrix to sparse format...")
   counts <- reticulate::py_to_r(matrix_data)
 
@@ -83,6 +106,7 @@ readH5AD <- function(file, use_raw = TRUE, assay = "RNA", verbose = TRUE) {
 
   # 4. 处理行名和列名
   obs_names <- reticulate::py_to_r(adata$obs_names$to_list())
+  var_names <- reticulate::py_to_r(var_names_py$to_list())
 
   # 基因名去重
   if (any(duplicated(var_names))) {
@@ -111,35 +135,25 @@ readH5AD <- function(file, use_raw = TRUE, assay = "RNA", verbose = TRUE) {
   # 7. 处理降维信息 (Embeddings)
   if (!reticulate::py_is_null_xptr(adata$obsm)) {
 
-    # === 关键修复点 ===
-    # adata.obsm.keys() 是 Python 的 dict_keys 对象，不能直接在 R 中循环
-    # 必须调用 Python 的 list() 显式转换为列表，再转为 R 向量
     obsm_keys_py <- builtins$list(adata$obsm$keys())
-    obsm_keys <- reticulate::py_to_r(obsm_keys_py)
+    obsm_keys <- tryCatch(reticulate::py_to_r(obsm_keys_py), error = function(e) NULL)
+    # 同样确保它是向量
+    obsm_keys <- unlist(obsm_keys)
 
     if (length(obsm_keys) > 0) {
       for (key in obsm_keys) {
-        # 跳过 spatial 坐标 (通常不作为 DimReduc 处理，或者需要特殊处理)
         if (key == "spatial") next
 
-        # 获取矩阵
         emb_matrix <- reticulate::py_to_r(adata$obsm$get(key))
 
-        # 简单检查行数匹配
         if (nrow(emb_matrix) != ncol(seurat_obj)) {
           if (verbose) warning(paste("Skipping", key, ": Dimensions do not match cell count."))
           next
         }
 
         rownames(emb_matrix) <- colnames(seurat_obj)
-
-        # 清洗 Key 名称 (例如 X_umap -> umap)
         clean_key <- gsub("^X_", "", key)
-
-        # 设置列名 (umap_1, umap_2)
         colnames(emb_matrix) <- paste0(clean_key, "_", 1:ncol(emb_matrix))
-
-        # Seurat Key (UMAP_)
         seurat_key <- paste0(toupper(clean_key), "_")
 
         if (verbose) message("Adding reduction: ", clean_key)
@@ -157,8 +171,6 @@ readH5AD <- function(file, use_raw = TRUE, assay = "RNA", verbose = TRUE) {
   if (verbose) message("Done.")
   return(seurat_obj)
 }
-
-
 # =============== writeH5AD ================
 # =============== 2.writeH5AD  ================
 #' @title Export Seurat Object to H5AD (Scanpy)

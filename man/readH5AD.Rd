@@ -2,15 +2,20 @@
 % Please edit documentation in R/3.scRNA-H5ad-Seurat-Trans.R
 \name{readH5AD}
 \alias{readH5AD}
-\title{Read H5AD file to Seurat Object}
+\title{Read H5AD file to Seurat Object (Fixed Version)}
 \usage{
-readH5AD(file, use_raw = TRUE, assay = "RNA", verbose = TRUE)
+readH5AD(file, data_type = "X", assay = "RNA", verbose = TRUE)
 }
 \arguments{
 \item{file}{Path to the .h5ad file.}
 
-\item{use_raw}{Logical. If TRUE, tries to use \code{adata.raw.X} (raw counts) as the expression matrix.
-If \code{adata.raw} is not present, falls back to \code{adata.X}. Default is TRUE.}
+\item{data_type}{Character. Specifies which matrix to use:
+\itemize{
+\item "X": uses \code{adata.X} (default).
+\item "raw": uses \code{adata.raw.X}.
+\item "counts", "logcounts", etc.: uses \code{adata.layers['name']}.
+If the requested type is not found, it automatically falls back to "X".
+}}
 
 \item{assay}{Name of the assay to create in Seurat object. Default is "RNA".}
 
@@ -22,25 +27,4 @@ A Seurat object.
 \description{
 Imports an AnnData object (.h5ad) and converts it to a Seurat object,
 preserving counts, metadata, and dimensionality reductions.
-}
-\examples{
-\dontrun{
-  library(Seurat)
-
-  # 1. 基础用法：读取 H5AD 文件
-  # 默认会自动寻找 raw counts
-  seu <- readH5AD("input_data/dataset.h5ad")
-  print(seu)
-
-  # 2. 强制读取 Normalized Data (adata.X)
-  # 如果你不需要 raw data，或者 h5ad 里没有 raw
-  seu_norm <- readH5AD("input_data/dataset.h5ad", use_raw = FALSE)
-
-  # 3. 指定 Assay 名称 (例如 Spatial)
-  seu_spatial <- readH5AD("input_data/spatial.h5ad", assay = "Spatial")
-
-  # 4. 验证降维结果
-  # 读取后可以直接画图
-  DimPlot(seu, reduction = "umap")
-}
 }

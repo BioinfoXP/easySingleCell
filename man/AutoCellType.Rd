@@ -60,14 +60,14 @@ AutoCellType(
 A \code{tibble} containing standardized columns: \code{cluster_id}, \code{primary_lineage}, \code{detailed_subtype}, \code{functional_state}, \code{confidence}, \code{reasoning}.
 }
 \description{
-A high-precision, parallelized single-cell annotation engine (v7.0).
+A high-precision, parallelized single-cell annotation engine (v7.2).
 
-\strong{Architecture Shift}:
+\strong{Critical Updates (v7.2)}:
 \enumerate{
-\item \strong{Single-Shot Strategy}: Processes clusters strictly \strong{one by one}. This eliminates "Model Laziness" (skipping clusters in a batch) and ensures maximum reasoning quality per cluster.
-\item \strong{User-Controlled Parallelism}: Uses multi-threading (\code{n_cores}) to execute single-shot requests concurrently, maintaining high throughput.
-\item \strong{Seurat Adapter}: Auto-detects V3/V4/V5 formats and fixes sorting bugs.
-\item \strong{Zero-NA Guarantee}: Automatically fills missing subtype fields with lineage information.
+\item \strong{Single-Shot Strategy}: Processes clusters strictly one-by-one. Eliminates "Model Laziness" (skipping clusters).
+\item \strong{Smart Error Handling}: Instantly catches fatal errors (HTTP 400/Model Not Found) to stop useless retries.
+\item \strong{JSON Auto-Repair}: Fixes "Premature EOF" by automatically closing broken JSON strings.
+\item \strong{Zero-NA Guarantee}: Strictly enforces no NA values in subtypes by filling with lineage info.
 }
 }
 \examples{

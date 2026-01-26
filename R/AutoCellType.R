@@ -1,12 +1,16 @@
+# ==============================================================================
+# 1. Core Engine: AutoCellType (v7.2 Fault-Tolerant)
+# ==============================================================================
+
 #' @title AutoCellType
 #' @description
-#' A high-precision, parallelized single-cell annotation engine (v7.0).
+#' A high-precision, parallelized single-cell annotation engine (v7.2).
 #'
-#' **Architecture Shift**:
-#' 1. **Single-Shot Strategy**: Processes clusters strictly **one by one**. This eliminates "Model Laziness" (skipping clusters in a batch) and ensures maximum reasoning quality per cluster.
-#' 2. **User-Controlled Parallelism**: Uses multi-threading (`n_cores`) to execute single-shot requests concurrently, maintaining high throughput.
-#' 3. **Seurat Adapter**: Auto-detects V3/V4/V5 formats and fixes sorting bugs.
-#' 4. **Zero-NA Guarantee**: Automatically fills missing subtype fields with lineage information.
+#' **Critical Updates (v7.2)**:
+#' 1. **Single-Shot Strategy**: Processes clusters strictly one-by-one. Eliminates "Model Laziness" (skipping clusters).
+#' 2. **Smart Error Handling**: Instantly catches fatal errors (HTTP 400/Model Not Found) to stop useless retries.
+#' 3. **JSON Auto-Repair**: Fixes "Premature EOF" by automatically closing broken JSON strings.
+#' 4. **Zero-NA Guarantee**: Strictly enforces no NA values in subtypes by filling with lineage info.
 #'
 #' @param input **Required**. The input marker data. Supports two formats:
 #'   \itemize{
@@ -109,43 +113,31 @@ AutoCellType <- function(
     verbose = TRUE
 ) {
 
-  # ============================================================================
-  # 1. Configuration & Ontology
-  # ============================================================================
+  # --- 1. Configuration ---
   STANDARD_COLS <- c("cluster_id", "primary_lineage", "detailed_subtype", "functional_state", "confidence", "reasoning")
 
   default_ontology <- c(
-    # Immune
     "T cell", "B cell", "Plasma cell", "NK cell", "Myeloid cell", "Macrophage", "Monocyte",
     "Dendritic cell", "Neutrophil", "Mast cell", "Eosinophil", "Basophil",
-    # Stromal
     "Fibroblast", "Mesenchymal cell", "Smooth muscle cell", "Pericyte", "Adipocyte",
     "Mesothelial cell", "Chondrocyte", "Osteoblast", "Stromal cell",
-    # Epithelial/Endothelial
     "Epithelial cell", "Endothelial cell", "Lymphatic endothelial cell", "Keratinocyte",
     "Hepatocyte", "Cholangiocyte", "Pneumocyte", "Podocyte", "Mesangial cell",
-    # Neural
     "Neuron", "Glial cell", "Schwann cell", "Cardiomyocyte",
-    # Embryonic
     "Stem cell", "Progenitor cell", "Embryonic stem cell", "Trophoblast",
     "Germ cell", "Erythrocyte", "Platelet", "Melanocyte"
   )
-
   current_ontology <- if (is.character(cell_ontology)) cell_ontology else default_ontology
   should_enforce <- !isFALSE(cell_ontology)
 
-  # ============================================================================
-  # 2. Dependency Check
-  # ============================================================================
+  # --- 2. Dependencies ---
   check_deps <- function() {
     pkgs <- c("openai", "dplyr", "glue", "tibble", "jsonlite", "stringr", "future", "future.apply", "progressr")
     missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
-    if (length(missing) > 0) stop("AutoCellType requires missing packages: ", paste(missing, collapse = ", "))
+    if (length(missing) > 0) stop("Missing packages: ", paste(missing, collapse = ", "))
   }
 
-  # ============================================================================
-  # 3. Data Formatting
-  # ============================================================================
+  # --- 3. Data Formatting ---
   format_markers <- function(dat, n, p_thresh) {
     if (inherits(dat, "data.frame")) {
       cols <- colnames(dat)
@@ -155,137 +147,156 @@ AutoCellType <- function(
       }
       if (!"avg_log2FC" %in% cols && "avg_logFC" %in% cols) dat <- dplyr::rename(dat, avg_log2FC = avg_logFC)
 
-      # Strict numeric conversion
       dat$avg_log2FC <- as.numeric(dat$avg_log2FC)
       if("p_val_adj" %in% cols) dat$p_val_adj <- as.numeric(dat$p_val_adj)
 
-      dat_clean <- dat |>
+      dat |>
         dplyr::filter(if("p_val_adj" %in% colnames(dat)) p_val_adj < p_thresh else TRUE) |>
         dplyr::filter(avg_log2FC > 0) |>
         dplyr::group_by(cluster) |>
         dplyr::slice_max(order_by = avg_log2FC, n = n) |>
         dplyr::summarise(genes = paste0(gene, collapse = ", "), .groups = "drop") |>
-        dplyr::mutate(cluster = as.character(cluster))
-
-      return(tibble::deframe(dat_clean))
+        dplyr::mutate(cluster = as.character(cluster)) |>
+        tibble::deframe()
     } else if (inherits(dat, "list")) {
       sapply(dat, function(x) paste0(head(x, n), collapse = ", "))
-    } else stop("Input must be a Data Frame or a List.")
+    } else stop("Input format error: Must be data.frame or list")
   }
 
-  # ============================================================================
-  # 4. Prompt Engineering (Single Shot)
-  # ============================================================================
+  # --- 4. Prompt Engineering ---
   make_system_prompt <- function() {
-    ctx <- glue::glue("Tissue Origin: {tissuename}")
+    ctx <- glue::glue("Tissue: {tissuename}")
     if (!is.null(prior_info)) ctx <- paste(ctx, glue::glue("Context: {prior_info}"), sep = "\n")
 
     ontology_str <- if(should_enforce) paste(paste0("- ", current_ontology), collapse = "\n") else "No strict list."
-
-    instruction <- if(should_enforce) {
-      glue::glue("For 'primary_lineage', SELECT EXACTLY from:\n{ontology_str}")
-    } else "Use standard scientific names."
+    instruction <- if(should_enforce) glue::glue("Primary Lineage MUST match one of:\n{ontology_str}") else "Use standard names."
 
     glue::glue("
-      You are an expert Cell Biologist. Annotate the SINGLE cluster provided.
-
-      --- CONTEXT ---
+      Act as a Senior Cell Biologist. Annotate the provided single-cell cluster.
       {ctx}
       {instruction}
 
-      --- RULES ---
-      1. Analyze the markers carefully.
-      2. 'detailed_subtype' is MANDATORY. Do not leave it empty.
-      3. Return a JSON Object (not array) for this single cluster.
+      RULES:
+      1. 'detailed_subtype' is MANDATORY. If unsure, copy primary_lineage.
+      2. NO MARKDOWN. NO EXPLANATIONS OUTSIDE JSON.
+      3. Output a SINGLE JSON object.
 
-      --- OUTPUT FORMAT ---
+      FORMAT:
       {{
         \"cluster_id\": \"id\",
         \"primary_lineage\": \"Standard Name\",
         \"detailed_subtype\": \"Specific Subtype\",
         \"functional_state\": \"State\",
         \"confidence\": \"High/Medium/Low\",
-        \"reasoning\": \"Logic\"
+        \"reasoning\": \"Short logic\"
       }}
     ")
   }
 
-  # ============================================================================
-  # 5. Utilities
-  # ============================================================================
-  standardize_one_row <- function(df, expected_cols) {
-    if (is.null(df) || nrow(df) == 0) return(NULL)
-    colnames(df) <- tolower(colnames(df))
+  # --- 5. JSON Repair Helper ---
+  repair_json <- function(json_str) {
+    # 1. Clean markdown
+    json_str <- gsub("```json", "", json_str)
+    json_str <- gsub("```", "", json_str)
+    json_str <- trimws(json_str)
 
-    missing <- setdiff(expected_cols, colnames(df))
-    if (length(missing) > 0) for (col in missing) df[[col]] <- NA
+    # 2. Try clean parse
+    out <- tryCatch(jsonlite::fromJSON(json_str), error = function(e) NULL)
+    if (!is.null(out)) return(out)
 
-    # N/A Killer
-    if ("detailed_subtype" %in% colnames(df) && "primary_lineage" %in% colnames(df)) {
-      df$detailed_subtype <- ifelse(
-        is.na(df$detailed_subtype) | df$detailed_subtype == "" | df$detailed_subtype == "N/A",
-        df$primary_lineage, df$detailed_subtype
-      )
+    # 3. Aggressive Repair (Fix Premature EOF)
+    if (!grepl("\\}$", json_str)) {
+      # Try appending '}'
+      try1 <- paste0(json_str, "}")
+      out <- tryCatch(jsonlite::fromJSON(try1), error = function(e) NULL)
+      if (!is.null(out)) return(out)
+
+      # Try appending '"}' (in case value was cut off)
+      try2 <- paste0(json_str, "\"}")
+      out <- tryCatch(jsonlite::fromJSON(try2), error = function(e) NULL)
+      if (!is.null(out)) return(out)
     }
-    return(df[, expected_cols, drop = FALSE])
+
+    return(NULL)
   }
 
-  align_lineage <- function(df, ontology_list) {
-    if (!should_enforce || is.null(df) || nrow(df) == 0) return(df)
-
-    val <- df$primary_lineage[1]
-    if (is.na(val)) { df$primary_lineage <- "Unknown"; return(df) }
-
-    if (val %in% ontology_list) return(df)
-
-    idx <- match(gsub("s$", "", tolower(val)), gsub("s$", "", tolower(ontology_list)))
-    if (!is.na(idx)) df$primary_lineage <- ontology_list[idx]
-
-    return(df)
-  }
-
-  # ============================================================================
-  # 6. Single Cluster Runner
-  # ============================================================================
+  # --- 6. Single Cluster Runner (Fault Tolerant) ---
   run_single_cluster <- function(cid, cgenes, client, sys_prompt, retry_limit) {
-    user_msg <- glue::glue("Cluster ID: {cid}\nTop Markers: {cgenes}")
-    last_error <- "Unknown Error"
+    user_msg <- glue::glue("Cluster ID: {cid}\nMarkers: {cgenes}")
+    last_error <- "Unknown"
 
     for (i in 1:retry_limit) {
       if (i > 1) Sys.sleep(2^(i-1))
 
+      # API Call
       api_res <- tryCatch({
         client$chat$completions$create(
           model = model,
           messages = list(list(role = "system", content = sys_prompt), list(role = "user", content = user_msg)),
-          temperature = 0.1, max_tokens = 1000, response_format = list(type = "json_object")
+          temperature = 0.1, max_tokens = 2000, response_format = list(type = "json_object")
         )
-      }, error = function(e) list(error = e$message))
-
-      if (!is.null(api_res$error)) { last_error <- paste("API Error:", api_res$error); next }
-
-      df <- tryCatch({
-        raw <- api_res$choices[[1]]$message$content
-        json_match <- stringr::str_extract(raw, "(?s)\\{.*\\}")
-        target <- if (!is.na(json_match)) json_match else raw
-        parsed <- jsonlite::fromJSON(target)
-
-        if (is.list(parsed) && !is.data.frame(parsed)) dplyr::bind_rows(parsed)
-        else if (is.data.frame(parsed)) parsed
-        else NULL
       }, error = function(e) {
-        if(i == retry_limit) last_error <<- paste("JSON Error:", e$message)
-        NULL
+        # [FATAL ERROR CHECK]
+        # If error is 400 (Bad Request) or "model does not exist", STOP immediately.
+        if (grepl("400", e$message) || grepl("does not exist", e$message)) {
+          stop(paste("FATAL_API_ERROR:", e$message))
+        }
+        return(list(error = e$message))
       })
 
-      if (!is.null(df) && nrow(df) > 0) {
-        df <- standardize_one_row(df, STANDARD_COLS)
-        df$cluster_id <- as.character(cid)
-        df <- align_lineage(df, current_ontology)
-        return(df)
+      # Handle Fatal Error thrown above
+      if (inherits(api_res, "error")) {
+        stop(api_res$message) # Re-throw to be caught by wrapper
       }
+
+      if (!is.null(api_res$error)) {
+        last_error <- paste("API Error:", api_res$error)
+        next
+      }
+
+      # Parse & Repair
+      raw <- api_res$choices[[1]]$message$content
+      # Extract JSON-like part
+      json_match <- stringr::str_extract(raw, "(?s)\\{.*")
+      target <- if (!is.na(json_match)) json_match else raw
+
+      df <- repair_json(target)
+
+      if (is.null(df)) {
+        last_error <- paste("JSON Parse Failed. Raw:", substr(raw, 1, 50))
+        next
+      }
+
+      # Standardization
+      if (is.list(df) && !is.data.frame(df)) df <- dplyr::bind_rows(df)
+      colnames(df) <- tolower(colnames(df))
+
+      missing <- setdiff(STANDARD_COLS, colnames(df))
+      if (length(missing) > 0) for (col in missing) df[[col]] <- NA
+
+      # [Gap Filling] Force 'detailed_subtype' if NA
+      if ("detailed_subtype" %in% colnames(df)) {
+        val <- df$detailed_subtype
+        if (is.na(val) || val == "" || val == "N/A" || val == "None" || val == "NA") {
+          # Fallback to primary lineage
+          df$detailed_subtype <- if("primary_lineage" %in% colnames(df)) df$primary_lineage else "Unknown"
+        }
+      }
+
+      # Ontology Alignment
+      if (should_enforce && "primary_lineage" %in% colnames(df)) {
+        val <- df$primary_lineage[1]
+        if (!is.na(val) && !val %in% current_ontology) {
+          idx <- match(gsub("s$", "", tolower(val)), gsub("s$", "", tolower(current_ontology)))
+          if (!is.na(idx)) df$primary_lineage <- current_ontology[idx]
+        }
+      }
+
+      df$cluster_id <- as.character(cid)
+      return(df[, STANDARD_COLS, drop = FALSE])
     }
 
+    # Return Failed Row
     return(tibble::tibble(
       cluster_id = as.character(cid),
       primary_lineage = "Failed",
@@ -294,13 +305,10 @@ AutoCellType <- function(
     ))
   }
 
-  # ============================================================================
-  # 7. Main Execution (Parallel/Sequential)
-  # ============================================================================
+  # --- 7. Main Loop ---
   tryCatch({
     check_deps()
     key <- if (is.null(api_key)) Sys.getenv("OPENAI_API_KEY") else api_key
-    if (!nzchar(key)) stop("API Key not found.")
     client <- openai::OpenAI(api_key = key, base_url = base_url)
 
     markers_vec <- format_markers(input, topgenenumber, p_val_thresh)
@@ -308,28 +316,24 @@ AutoCellType <- function(
 
     sys_prompt <- make_system_prompt()
     cluster_ids <- names(markers_vec)
-    n_total <- length(cluster_ids)
 
-    mode_msg <- if (n_cores > 1) glue::glue("Parallel ({n_cores} cores)") else "Sequential"
-    if (verbose) message(glue::glue("=== AutoCellType v7.0 | {n_total} Clusters | {mode_msg} ==="))
+    if (verbose) message(glue::glue("=== AutoCellType v7.2 ({model}) | {length(cluster_ids)} Clusters | Cores: {n_cores} ==="))
 
-    worker_fun <- function(cid) {
-      run_single_cluster(cid, markers_vec[cid], client, sys_prompt, retries)
-    }
+    worker <- function(cid) run_single_cluster(cid, markers_vec[cid], client, sys_prompt, retries)
 
     if (n_cores > 1) {
       future::plan(future::multisession, workers = n_cores)
       res_list <- progressr::with_progress({
-        p <- progressr::progressor(steps = n_total)
+        p <- progressr::progressor(steps = length(cluster_ids))
         future.apply::future_lapply(cluster_ids, function(cid) {
           p(sprintf("Cluster %s", cid))
-          worker_fun(cid)
+          worker(cid)
         }, future.seed = TRUE)
       })
     } else {
       res_list <- purrr::map(cluster_ids, function(cid) {
         if(verbose) message(glue::glue("Processing Cluster {cid}..."))
-        worker_fun(cid)
+        worker(cid)
       })
     }
 
@@ -337,5 +341,7 @@ AutoCellType <- function(
     if (verbose) message("=== Done ===")
     return(final_df)
 
-  }, error = function(e) stop("Error: ", e$message))
+  }, error = function(e) stop("AutoCellType Critical Error: ", e$message))
 }
+
+

@@ -20,55 +20,47 @@ AutoCellType(
 )
 }
 \arguments{
-\item{input}{\strong{Required}. The input marker data. Supports two formats:
+\item{input}{Required. The input marker data. Supports two formats:
 \itemize{
 \item \strong{Data Frame}: Output from Seurat's \code{FindAllMarkers()}. Must contain \code{cluster} and \code{gene} (or rownames) columns, plus \code{avg_log2FC} (or \code{avg_logFC}).
 \item \strong{List}: A named list of marker vectors, e.g., \code{list("Cluster0" = c("GeneA", "GeneB"), ...)}.
 }}
 
-\item{tissuename}{\strong{Character}. The tissue of origin (e.g., "Human Liver", "Mouse Brain"). Serves as the primary biological context.}
+\item{tissuename}{Character. The tissue of origin (e.g., "Human Liver", "Mouse Brain"). Serves as the primary biological context.}
 
-\item{cell_ontology}{\strong{Constraint Mode}. Controls the standardization of the 'primary_lineage' field:
+\item{cell_ontology}{Constraint Mode. Controls the standardization of the 'primary_lineage' field:
 \itemize{
-\item \code{NULL} (Default): Uses the built-in \strong{Universal Ontology} (~40 types).
-\item \code{Character Vector}: \strong{Recommended for Sub-clustering}. A user-defined list of allowed subtypes.
+\item \code{NULL} (Default): Uses the built-in Universal Ontology** (~40 types).
+\item \code{Character Vector}: Recommended for Sub-clustering**. A user-defined list of allowed subtypes.
 }}
 
-\item{prior_info}{\strong{Character} (Optional). External biological context. E.g., "T cell sub-clustering".}
+\item{prior_info}{Character (Optional). External biological context. E.g., "T cell sub-clustering".}
 
-\item{n_cores}{\strong{Integer}. Number of parallel threads.
+\item{n_cores}{Integer. Number of parallel threads.
 \itemize{
 \item \code{1} (Default): Sequential processing (safest for debugging).
 \item \code{>1}: Parallel processing (Recommended: 4-8). Requires high API rate limits.
 }}
 
-\item{model}{\strong{Character}. LLM model name. Default \code{"gpt-4o-mini"}. \code{"gpt-4o"} is recommended for sub-clustering.}
+\item{model}{Character. LLM model name. Default \code{"gpt-4o-mini"}. \code{"gpt-4o"} is recommended for sub-clustering.}
 
-\item{topgenenumber}{\strong{Integer}. The number of top markers (sorted by LogFC) to send per cluster. Default: 20.}
+\item{topgenenumber}{Integer. The number of top markers (sorted by LogFC) to send per cluster. Default: 20.}
 
-\item{p_val_thresh}{\strong{Numeric}. Significance threshold. Default: 0.05.}
+\item{p_val_thresh}{Numeric. Significance threshold. Default: 0.05.}
 
-\item{base_url}{\strong{Character}. API endpoint. Default: "https://api.gpt.ge/v1".}
+\item{base_url}{Character. API endpoint. Default: "https://api.gpt.ge/v1".}
 
-\item{api_key}{\strong{Character}. OpenAI-compatible API Key. Defaults to \code{Sys.getenv("OPENAI_API_KEY")}.}
+\item{api_key}{Character. OpenAI-compatible API Key. Defaults to \code{Sys.getenv("OPENAI_API_KEY")}.}
 
-\item{retries}{\strong{Integer}. Max retry attempts per cluster. Default: 3.}
+\item{retries}{Integer. Max retry attempts per cluster. Default: 3.}
 
-\item{verbose}{\strong{Logical}. Print progress bar. Default: \code{TRUE}.}
+\item{verbose}{Logical. Print progress bar. Default: \code{TRUE}.}
 }
 \value{
 A \code{tibble} containing standardized columns: \code{cluster_id}, \code{primary_lineage}, \code{detailed_subtype}, \code{functional_state}, \code{confidence}, \code{reasoning}.
 }
 \description{
-A high-precision, parallelized single-cell annotation engine (v7.2).
-
-\strong{Critical Updates (v7.2)}:
-\enumerate{
-\item \strong{Single-Shot Strategy}: Processes clusters strictly one-by-one. Eliminates "Model Laziness" (skipping clusters).
-\item \strong{Smart Error Handling}: Instantly catches fatal errors (HTTP 400/Model Not Found) to stop useless retries.
-\item \strong{JSON Auto-Repair}: Fixes "Premature EOF" by automatically closing broken JSON strings.
-\item \strong{Zero-NA Guarantee}: Strictly enforces no NA values in subtypes by filling with lineage info.
-}
+A high-precision, parallelized single-cell annotation engine.
 }
 \examples{
 \dontrun{

@@ -1,41 +1,35 @@
 # ==============================================================================
-# 1. Core Engine: AutoCellType (v7.2 Fault-Tolerant)
+# 1. Core Engine: AutoCellType
 # ==============================================================================
 
 #' @title AutoCellType
 #' @description
-#' A high-precision, parallelized single-cell annotation engine (v7.2).
+#' A high-precision, parallelized single-cell annotation engine.
 #'
-#' **Critical Updates (v7.2)**:
-#' 1. **Single-Shot Strategy**: Processes clusters strictly one-by-one. Eliminates "Model Laziness" (skipping clusters).
-#' 2. **Smart Error Handling**: Instantly catches fatal errors (HTTP 400/Model Not Found) to stop useless retries.
-#' 3. **JSON Auto-Repair**: Fixes "Premature EOF" by automatically closing broken JSON strings.
-#' 4. **Zero-NA Guarantee**: Strictly enforces no NA values in subtypes by filling with lineage info.
-#'
-#' @param input **Required**. The input marker data. Supports two formats:
+#' @param input Required. The input marker data. Supports two formats:
 #'   \itemize{
 #'     \item \strong{Data Frame}: Output from Seurat's \code{FindAllMarkers()}. Must contain \code{cluster} and \code{gene} (or rownames) columns, plus \code{avg_log2FC} (or \code{avg_logFC}).
 #'     \item \strong{List}: A named list of marker vectors, e.g., \code{list("Cluster0" = c("GeneA", "GeneB"), ...)}.
 #'   }
-#' @param tissuename **Character**. The tissue of origin (e.g., "Human Liver", "Mouse Brain"). Serves as the primary biological context.
-#' @param n_cores **Integer**. Number of parallel threads.
+#' @param tissuename Character. The tissue of origin (e.g., "Human Liver", "Mouse Brain"). Serves as the primary biological context.
+#' @param n_cores Integer. Number of parallel threads.
 #'   \itemize{
 #'     \item \code{1} (Default): Sequential processing (safest for debugging).
 #'     \item \code{>1}: Parallel processing (Recommended: 4-8). Requires high API rate limits.
 #'   }
-#' @param cell_ontology **Constraint Mode**. Controls the standardization of the 'primary_lineage' field:
+#' @param cell_ontology Constraint Mode. Controls the standardization of the 'primary_lineage' field:
 #'   \itemize{
-#'     \item \code{NULL} (Default): Uses the built-in **Universal Ontology** (~40 types).
-#'     \item \code{Character Vector}: **Recommended for Sub-clustering**. A user-defined list of allowed subtypes.
+#'     \item \code{NULL} (Default): Uses the built-in Universal Ontology** (~40 types).
+#'     \item \code{Character Vector}: Recommended for Sub-clustering**. A user-defined list of allowed subtypes.
 #'   }
-#' @param prior_info **Character** (Optional). External biological context. E.g., "T cell sub-clustering".
-#' @param model **Character**. LLM model name. Default \code{"gpt-4o-mini"}. \code{"gpt-4o"} is recommended for sub-clustering.
-#' @param topgenenumber **Integer**. The number of top markers (sorted by LogFC) to send per cluster. Default: 20.
-#' @param p_val_thresh **Numeric**. Significance threshold. Default: 0.05.
-#' @param base_url **Character**. API endpoint. Default: "https://api.gpt.ge/v1".
-#' @param api_key **Character**. OpenAI-compatible API Key. Defaults to \code{Sys.getenv("OPENAI_API_KEY")}.
-#' @param retries **Integer**. Max retry attempts per cluster. Default: 3.
-#' @param verbose **Logical**. Print progress bar. Default: \code{TRUE}.
+#' @param prior_info Character (Optional). External biological context. E.g., "T cell sub-clustering".
+#' @param model Character. LLM model name. Default \code{"gpt-4o-mini"}. \code{"gpt-4o"} is recommended for sub-clustering.
+#' @param topgenenumber Integer. The number of top markers (sorted by LogFC) to send per cluster. Default: 20.
+#' @param p_val_thresh Numeric. Significance threshold. Default: 0.05.
+#' @param base_url Character. API endpoint. Default: "https://api.gpt.ge/v1".
+#' @param api_key Character. OpenAI-compatible API Key. Defaults to \code{Sys.getenv("OPENAI_API_KEY")}.
+#' @param retries Integer. Max retry attempts per cluster. Default: 3.
+#' @param verbose Logical. Print progress bar. Default: \code{TRUE}.
 #'
 #' @return A \code{tibble} containing standardized columns: \code{cluster_id}, \code{primary_lineage}, \code{detailed_subtype}, \code{functional_state}, \code{confidence}, \code{reasoning}.
 #'
@@ -317,7 +311,7 @@ AutoCellType <- function(
     sys_prompt <- make_system_prompt()
     cluster_ids <- names(markers_vec)
 
-    if (verbose) message(glue::glue("=== AutoCellType v7.2 ({model}) | {length(cluster_ids)} Clusters | Cores: {n_cores} ==="))
+    if (verbose) message(glue::glue("=== AutoCellType ({model}) | {length(cluster_ids)} Clusters | Cores: {n_cores} ==="))
 
     worker <- function(cid) run_single_cluster(cid, markers_vec[cid], client, sys_prompt, retries)
 

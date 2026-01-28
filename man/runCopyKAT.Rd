@@ -21,69 +21,60 @@ runCopyKAT(
 )
 }
 \arguments{
-\item{sce}{A Seurat object containing both tumor and normal/immune cells.}
+\item{sce}{A Seurat object.}
 
 \item{target_class}{String. The cell type to investigate (e.g., "Epithelial").}
 
-\item{ref_classes}{Vector of strings. The cell types to serve as normal references (e.g., c("T_cell", "Myeloid")).}
+\item{ref_classes}{Vector of strings. The normal reference cell types (e.g., c("T_cell", "Myeloid")).}
 
-\item{sample_col}{String. Column name for sample IDs. Default: "orig.ident".}
+\item{sample_col}{String. Metadata column for sample IDs. Default: "orig.ident".}
 
-\item{celltype_col}{String. Column name for cell types. Default: "celltype".}
+\item{celltype_col}{String. Metadata column for cell types. Default: "celltype".}
 
 \item{output_dir}{String. Directory to save results. Default: "./CopyKAT".}
 
-\item{overwrite}{Logical. If TRUE, re-runs CopyKAT even if output files exist. Default: FALSE.}
+\item{overwrite}{Logical. If TRUE, re-runs existing samples. Default: FALSE.}
 
-\item{min_cells}{Integer. Minimum number of cells required per sample. Default: 25.}
+\item{min_cells}{Integer. Minimum cells required per sample (target + ref). Default: 25.}
 
 \item{n.cores}{Integer. Number of cores. Default: 20.}
 
-\item{KS.cut}{Numeric. Segmentation sensitivity (0-1). Default: 0.1.}
-
-\item{ngene.chr}{Integer. Min genes per chromosome. Default: 5.}
-
-\item{win.size}{Integer. Window size. Default: 25.}
-
-\item{...}{Additional arguments passed directly to copykat().}
+\item{...}{Additional arguments passed to copykat() (e.g., KS.cut, ngene.chr).}
 }
 \value{
-A Seurat object with added 'copykat.pred' metadata.
+Invisible data.frame of the combined results. Main output is the CSV file.
 }
 \description{
-Runs CopyKAT on a Seurat object by splitting it into samples.
+Runs CopyKAT on a Seurat object sample by sample.
 }
 \examples{
 \dontrun{
-  # 1. Basic Run (Resume mode by default)
-  # It will skip samples that already have output files in ./CopyKAT
-  sce_res <- runCopyKAT(
-    sce = sce_full,
-    target_class = "Epithelial",
-    ref_classes = c("T_cell", "Myeloid")
-  )
-
-  # 2. Force Re-run (Overwrite existing results)
-  # Useful if you changed parameters (e.g., KS.cut) and need to update results
-  sce_res <- runCopyKAT(
-    sce = sce_full,
-    target_class = "Epithelial",
-    ref_classes = c("T_cell"),
-    overwrite = TRUE,
-    n.cores = 30
-  )
-
-  # 3. Advanced Tuning
-  sce_res <- runCopyKAT(
+  # 1. Basic Run
+  # Results will be saved to "./CopyKAT/AllSamples_CopyKAT_prediction.csv"
+  runCopyKAT(
     sce = sce_full,
     target_class = "Epithelial",
     ref_classes = c("T_cell", "Macrophage"),
-    KS.cut = 0.15,      # Less sensitive segmentation
-    win.size = 20,      # Smaller window size
-    output_dir = "./Analysis/CopyKAT_V2"
+    n.cores = 10
   )
 
-  # 4. Visualization
-  Seurat::DimPlot(sce_res, group.by = "copykat.pred")
+  # 2. Advanced: Manual Annotation (How to use the output)
+  # Since the function doesn't return a Seurat object, do this afterwards:
+
+  # a) Read the generated CSV
+  res <- read.csv("./CopyKAT/AllSamples_CopyKAT_prediction.csv")
+
+  # b) Check match rate (using the auto-cleaned ID)
+  print(mean(res$cleaned_id \%in\% colnames(sce_full)))
+
+  # c) Add to Seurat (Safe Join)
+  library(tidyverse)
+  meta_to_add <- res \%>\%
+     distinct(cleaned_id, .keep_all = TRUE) \%>\%
+     column_to_rownames("cleaned_id") \%>\%
+     select(copykat.pred)
+
+  sce_full <- AddMetaData(sce_full, meta_to_add)
+  DimPlot(sce_full, group.by="copykat.pred")
 }
 }

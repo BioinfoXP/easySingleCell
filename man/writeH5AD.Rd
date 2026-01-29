@@ -33,3 +33,24 @@ writeH5AD(
 Converts a Seurat object into a .h5ad file compatible with Scanpy.
 Fully compatible with both Seurat V4 and V5 structures.
 }
+\examples{
+\dontrun{
+  library(Seurat)
+  # 使用 Seurat 自带的小型示例数据集
+  data("pbmc_small")
+
+  # 定义输出路径 (这里使用临时文件演示)
+  out_file <- tempfile(fileext = ".h5ad")
+
+  # 1. 基础导出 (默认导出 DefaultAssay)
+  writeH5AD(pbmc_small, file = out_file)
+
+  # 2. 自定义参数导出 (指定 Assay 和 Layer 名称)
+  # writeH5AD(object = pbmc_small,
+  #           file = "output_sct.h5ad",
+  #           assay = "SCT",
+  #           layer_counts = "counts",
+  #           layer_data = "data")
+}
+
+}

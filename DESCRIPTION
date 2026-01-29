@@ -1,6 +1,6 @@
 Package: easySingleCell
 Title: Accelerate Bioinformatics Analysis for Bulk, scRNA-seq, and stRNA-seq
-Version: 1.0.3
+Version: 1.0.4
 Authors@R: 
     person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))

@@ -171,6 +171,8 @@ readH5AD <- function(file, data_type = "X", assay = "RNA", verbose = TRUE) {
   if (verbose) message("Done.")
   return(seurat_obj)
 }
+
+
 # =============== writeH5AD ================
 # =============== 2.writeH5AD  ================
 #' @title Export Seurat Object to H5AD (Scanpy)
@@ -185,6 +187,26 @@ readH5AD <- function(file, data_type = "X", assay = "RNA", verbose = TRUE) {
 #' @param export_embeddings Logical. Whether to export dimensionality reductions. Default TRUE.
 #' @param verbose Logical. Print progress. Default TRUE.
 #'
+#' @examples
+#' \dontrun{
+#'   library(Seurat)
+#'   # 使用 Seurat 自带的小型示例数据集
+#'   data("pbmc_small")
+#'
+#'   # 定义输出路径 (这里使用临时文件演示)
+#'   out_file <- tempfile(fileext = ".h5ad")
+#'
+#'   # 1. 基础导出 (默认导出 DefaultAssay)
+#'   writeH5AD(pbmc_small, file = out_file)
+#'
+#'   # 2. 自定义参数导出 (指定 Assay 和 Layer 名称)
+#'   # writeH5AD(object = pbmc_small,
+#'   #           file = "output_sct.h5ad",
+#'   #           assay = "SCT",
+#'   #           layer_counts = "counts",
+#'   #           layer_data = "data")
+#' }
+#'
 #' @export
 #' @importFrom Seurat DefaultAssay GetAssayData GetTissueCoordinates Embeddings Key
 #' @importFrom Matrix t
@@ -198,24 +220,23 @@ writeH5AD <- function(object,
                       verbose = TRUE) {
 
   # --- 0. 内部辅助函数：V4/V5 兼容的数据提取 ---
-
-  # 获取矩阵数据 (兼容 V4 slot 和 V5 layer)
   .get_matrix_data <- function(obj, assay, type) {
-    # 尝试方法 A: V5 Layers
-    # 检查是否为 V5 对象且有 layers
+    # 动态检查环境是否支持 V5
+    # 注意：这里不使用 importFrom，而是运行时检查，避免 V4 环境编译报错
     is_v5 <- tryCatch("LayerData" %in% getNamespaceExports("Seurat"), error = function(e) FALSE)
-
     mat <- NULL
 
     if (is_v5) {
-      # Seurat V5 逻辑
-      # 检查 layer 是否存在
+      # Seurat V5 逻辑 (使用 :: 动态调用，避免静态依赖)
+      # 这里的 Seurat::Layers 和 Seurat::LayerData 在 V4 环境下不会执行到，
+      # 所以不会报错，且不需要在 importFrom 中声明
       avail_layers <- Seurat::Layers(obj, assay = assay)
+
       if (type %in% avail_layers) {
         if(verbose) message(paste("  [V5] Extracting layer:", type))
         mat <- Seurat::LayerData(obj, assay = assay, layer = type)
       } else if (type == "counts" && "counts" %in% names(obj@assays[[assay]])) {
-        # 回退兼容
+        # V5 对象但可能是 V3/V4 转换过来的，没有 layer 只有 slot
         mat <- Seurat::GetAssayData(obj, assay = assay, slot = "counts")
       } else if (type == "data" && "data" %in% names(obj@assays[[assay]])) {
         mat <- Seurat::GetAssayData(obj, assay = assay, slot = "data")
@@ -223,7 +244,6 @@ writeH5AD <- function(object,
     } else {
       # Seurat V4 逻辑
       if(verbose) message(paste("  [V4] Extracting slot:", type))
-      # V4 通常 slot 叫 counts 或 data
       try({
         mat <- Seurat::GetAssayData(obj, assay = assay, slot = type)
       }, silent = TRUE)
@@ -238,28 +258,16 @@ writeH5AD <- function(object,
     return(mat)
   }
 
-  # 获取空间坐标 (兼容 V4/V5 返回格式差异)
+  # 获取空间坐标 (兼容 V4/V5)
   .get_spatial_coords <- function(obj, img_key) {
-    # V5 可能返回 columns: x, y, cell
-    # V4 可能返回 columns: imagecol, imagerow (rownames 是 cell)
     coords <- Seurat::GetTissueCoordinates(obj, image = img_key)
-
-    # 统一获取 Cell IDs
     cell_ids <- rownames(coords)
-    if ("cell" %in% colnames(coords)) {
-      cell_ids <- coords$cell
-    }
+    if ("cell" %in% colnames(coords)) cell_ids <- coords$cell
 
-    # 统一获取 X, Y (Scanpy 标准: columns=[x, y])
-    # 注意: imagecol 是 x, imagerow 是 y
+    # 尝试匹配列名
     target_cols <- c("imagecol", "imagerow")
-
     if (!all(target_cols %in% colnames(coords))) {
-      # 尝试 fallback 到 x, y
       if (all(c("x", "y") %in% colnames(coords))) {
-        # 注意: Seurat V5 有时 x=row(y), y=col(x)，这很混乱。
-        # 通常 Visium 标准是: imagecol=x, imagerow=y.
-        # 如果只有 x, y，通常假设对应 col, row
         target_cols <- c("x", "y")
       } else {
         # 最后的尝试：取前两列数值
@@ -267,122 +275,99 @@ writeH5AD <- function(object,
         target_cols <- colnames(coords)[num_cols][1:2]
       }
     }
-
-    # 提取并重组
     final_coords <- as.matrix(coords[, target_cols])
     rownames(final_coords) <- cell_ids
-    colnames(final_coords) <- c("x", "y") # 强制重命名以便 Python 识别
-
+    colnames(final_coords) <- c("x", "y")
     return(final_coords)
   }
 
   # --- 1. 环境检查 ---
-
   if (!requireNamespace("reticulate", quietly = TRUE)) stop("Install 'reticulate' first.")
 
   if (is.null(assay)) assay <- Seurat::DefaultAssay(object)
   if (verbose) message(paste("Exporting Assay:", assay))
 
-  # 加载 Python
+  # 加载 Python 库
   ad <- reticulate::import("anndata", convert = FALSE)
   pd <- reticulate::import("pandas", convert = FALSE)
   np <- reticulate::import("numpy", convert = FALSE)
 
-  # --- 2. 准备矩阵 (X 和 Layers) ---
+  # --- 2. 准备数据 ---
 
-  # 2.1 获取 X (Data/Normalized)
+  # 2.1 准备 X (Layer Data / Normalized)
   mat_X <- .get_matrix_data(object, assay, layer_data)
-
-  # 如果没有 data 层，尝试用 counts 层顶替 X
   if (is.null(mat_X)) {
     if (verbose) message("Layer 'data' not found. Using 'counts' as X.")
     mat_X <- .get_matrix_data(object, assay, layer_counts)
   }
-
   if (is.null(mat_X)) stop("Could not find expression data (counts or data).")
 
-  # 转置 + 稀疏化
   mat_X <- Matrix::t(mat_X)
   mat_X <- as(mat_X, "dgCMatrix")
 
-  # 2.2 准备 MetaData (类型安全转换)
+  # 2.2 准备 Layers (Raw Counts)
+  # 提前提取 counts 并放入 list，传给构造函数
+  layers_list <- list()
+  mat_counts <- .get_matrix_data(object, assay, layer_counts)
+
+  if (!is.null(mat_counts)) {
+    if (verbose) message(paste0("Preparing layer '", layer_counts, "'..."))
+    mat_counts <- Matrix::t(mat_counts)
+    mat_counts <- as(mat_counts, "dgCMatrix")
+    layers_list[[layer_counts]] <- mat_counts
+  }
+
+  # 2.3 准备 MetaData
   meta_df <- object@meta.data
   i <- sapply(meta_df, is.factor)
   meta_df[i] <- lapply(meta_df[i], as.character) # Factor -> Char
 
-  # 2.3 创建 AnnData
+  # --- 3. 创建 AnnData ---
   if (verbose) message("Creating AnnData object...")
+
+  # 直接在构造函数中传入 layers
   adata <- ad$AnnData(
     X = mat_X,
     obs = pd$DataFrame(meta_df),
-    var = pd$DataFrame(index = colnames(mat_X))
+    var = pd$DataFrame(index = colnames(mat_X)),
+    layers = if(length(layers_list) > 0) layers_list else NULL
   )
 
-  # 2.4 添加 Raw Counts (如果存在且不同于 X)
-  mat_counts <- .get_matrix_data(object, assay, layer_counts)
-  if (!is.null(mat_counts)) {
-    if (verbose) message("Adding 'counts' to layers...")
-    mat_counts <- Matrix::t(mat_counts)
-    mat_counts <- as(mat_counts, "dgCMatrix")
-    adata$layers[[layer_counts]] <- mat_counts
-  }
-
-  # --- 3. 导出降维 (Embeddings) ---
-
+  # --- 4. 导出降维 (Embeddings) ---
   if (export_embeddings && length(object@reductions) > 0) {
     if (verbose) message("Exporting reductions...")
     for (red in names(object@reductions)) {
       emb <- Seurat::Embeddings(object, reduction = red)
-
-      # 命名修正: umap -> X_umap
       key_name <- paste0("X_", red)
       if (grepl("^X_", red)) key_name <- red
-
       adata$obsm[[key_name]] <- np$array(emb)
     }
   }
 
-  # --- 4. 导出空间信息 (Spatial) ---
-
+  # --- 5. 导出空间信息 (Spatial) ---
   if (length(object@images) > 0) {
     if (verbose) message("Exporting spatial data (Images & Coordinates)...")
-
-    # 默认取第一张图
     img_key <- names(object@images)[1]
     image_obj <- object@images[[img_key]]
 
-    # 4.1 获取坐标 (使用兼容函数)
     spatial_coords <- .get_spatial_coords(object, img_key)
-
-    # 确保坐标顺序与 adata.obs (Cells) 一致
-    # Seurat 可能会过滤掉一些没有坐标的细胞，或者顺序不同
-    common_cells <- intersect(rownames(adata$obs_names$to_list()), rownames(spatial_coords))
-
-    if (length(common_cells) < nrow(spatial_coords)) {
-      warning("Some cells in object do not have spatial coordinates.")
-    }
-
-    # Scanpy 要求 obsm['spatial'] 必须和 obs 行数一一对应且顺序一致
-    # 这里的策略：先创建一个全是 NaN 的矩阵，然后填入有坐标的值
-    # 或者让 Scanpy 处理。更安全的方法是只存匹配的。
-    # 但由于 h5ad 结构限制，obsm 必须和 shape[0] 一致。
-
-    # 简单处理：我们假设 Seurat 对象里的细胞都有坐标 (如果是空间对象)
-    # 按照 adata.obs_names 重排坐标
     cell_order <- unlist(adata$obs_names$to_list())
-    spatial_ordered <- spatial_coords[cell_order, , drop=FALSE]
 
-    # 替换 NA 为 0 (防止 Python 报错，虽然 Ideally 不该有 NA)
-    spatial_ordered[is.na(spatial_ordered)] <- 0
+    spatial_ordered <- matrix(0, nrow = length(cell_order), ncol = 2)
+    rownames(spatial_ordered) <- cell_order
+    colnames(spatial_ordered) <- c("x", "y")
+
+    common <- intersect(cell_order, rownames(spatial_coords))
+    if(length(common) > 0) {
+      spatial_ordered[common, ] <- spatial_coords[common, ]
+    }
 
     adata$obsm[["spatial"]] <- np$array(spatial_ordered)
 
-    # 4.2 Scale Factors
     scale_factors <- image_obj@scale.factors
-
     spatial_dict <- list()
     spatial_dict[[img_key]] <- list(
-      images = list(hires = NULL, lowres = NULL), # 不导出图片内容，防文件过大
+      images = list(hires = NULL, lowres = NULL),
       scalefactors = list(
         tissue_hires_scalef = scale_factors$hires,
         tissue_lowres_scalef = scale_factors$lowres,
@@ -391,11 +376,10 @@ writeH5AD <- function(object,
       ),
       metadata = list(chemistry_description = "Visium")
     )
-
     adata$uns[["spatial"]] <- reticulate::r_to_py(spatial_dict)
   }
 
-  # --- 5. 写入 ---
+  # --- 6. 写入文件 ---
   if (verbose) message(paste("Writing H5AD to:", file))
   adata$write_h5ad(file)
   if (verbose) message("Done.")

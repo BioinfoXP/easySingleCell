@@ -31,10 +31,7 @@ export(scVisFeaturePlot)
 export(scVisRatioBox)
 export(scVisRoePlot)
 export(scVisVlnPlot)
-<<<<<<< HEAD
-=======
 export(symbol2ensembl)
->>>>>>> a268791 (Update)
 export(writeH5AD)
 import(org.Hs.eg.db)
 importFrom(Biobase,AnnotatedDataFrame)

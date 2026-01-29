@@ -2,33 +2,47 @@
 % Please edit documentation in R/3.scRNA-symbol2ensembl.R
 \name{symbol2ensembl}
 \alias{symbol2ensembl}
-\title{Convert Gene Symbols to Ensembl IDs}
+\title{Convert Gene Symbols to Ensembl IDs (Multi-species)}
 \usage{
-symbol2ensembl(sce, assay = NULL, db = NULL, verbose = TRUE)
+symbol2ensembl(
+  sce,
+  assay = NULL,
+  species = "human",
+  target_species = "same",
+  db_human = NULL,
+  db_mouse = NULL,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{sce}{A Seurat object.}
 
-\item{assay}{Name of the assay to use. Defaults to the current DefaultAssay.}
+\item{assay}{Name of the assay to use. Defaults to \code{Seurat::DefaultAssay(sce)}.}
 
-\item{db}{Annotation database object. Defaults to org.Hs.eg.db.}
+\item{species}{Input species. Options: "human" (default), "mouse".}
 
-\item{verbose}{Logical. Whether to print progress. Default TRUE.}
+\item{target_species}{Output species for Ensembl IDs. Options: "same" (default), "human", "mouse".}
+
+\item{db_human}{Human annotation database. Default \code{org.Hs.eg.db}.}
+
+\item{db_mouse}{Mouse annotation database. Default \code{org.Mm.eg.db}.}
+
+\item{verbose}{Logical. Whether to print progress messages. Default TRUE.}
 }
 \value{
 A new Seurat object with Ensembl ID row names.
 }
 \description{
 Converts Seurat object row names from Symbols to Ensembl IDs.
-Optimized for Geneformer and other Ensembl-based downstream tools.
+Optimized for Geneformer. Supports Human and Mouse, including cross-species conversion.
 }
 \examples{
 \dontrun{
-  # Example with Seurat built-in dataset
-  library(Seurat)
-  data("pbmc_small")
-  # Convert symbols to Ensembl
-  pbmc_ens <- symbol2ensembl(sce = pbmc_small)
+  # Human Symbol to Human Ensembl
+  sce_ens <- symbol2ensembl(sce = pbmc_small)
+
+  # Human Symbol to Mouse Ensembl (Cross-species)
+  sce_mouse_ens <- symbol2ensembl(sce = pbmc_small, target_species = "mouse")
 }
 
 }

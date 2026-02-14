@@ -2,26 +2,35 @@
 % Please edit documentation in R/2.scRNA-Trajectory-Analysis.R
 \name{runMonocleAnalysis}
 \alias{runMonocleAnalysis}
-\title{Process scRNA Data with Monocle2}
+\title{Run Complete Monocle2 Analysis with Stratified Downsampling}
 \usage{
 runMonocleAnalysis(
   scRNA,
-  save_path = "./output_data/monocle2.Rdata",
-  cores = 4,
-  mean_expression = 0.1,
-  disp_ratio = 1
+  save_path = "./output_data/monocle2.RData",
+  downsample_n = 5000,
+  stratify_by = NULL,
+  use_seurat_var_genes = TRUE,
+  cores = 4
 )
 }
 \arguments{
-\item{scRNA}{Seurat Object.}
+\item{scRNA}{A Seurat Object.}
 
-\item{save_path}{Rdata save path.}
+\item{save_path}{Path to save results.}
 
-\item{cores}{CPU cores.}
-}
-\value{
-A list containing Monocle CDS and reversed CDS.
+\item{downsample_n}{Integer. Total target number of cells (e.g., 3000).}
+
+\item{stratify_by}{Character. Metadata column to stratify by (e.g., "celltype"). Default is NULL (uses active Idents).}
+
+\item{use_seurat_var_genes}{Logical. Use Seurat's VariableFeatures (Recommended).}
+
+\item{cores}{Number of cores.}
 }
 \description{
-Performs dimensionality reduction and cell ordering using Monocle2.
+A robust wrapper for Monocle2 with:
+\enumerate{
+\item Stratified Downsampling (Preserves rare cell types).
+\item Auto-patches for igraph/VGAM compatibility.
+\item Memory safety features.
+}
 }

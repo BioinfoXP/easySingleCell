@@ -2,7 +2,7 @@
 % Please edit documentation in R/2.scRNA-CNA-Analysis.R
 \name{runCopyKAT}
 \alias{runCopyKAT}
-\title{Run CopyKAT by Sample}
+\title{Run CopyKAT by Sample or with Shared Reference}
 \usage{
 runCopyKAT(
   sce,
@@ -10,10 +10,16 @@ runCopyKAT(
   ref_classes,
   sample_col = "orig.ident",
   celltype_col = "celltype",
+  assay = "RNA",
   output_dir = "./CopyKAT",
   overwrite = FALSE,
+  ref_mode = c("sample", "shared"),
   min_cells = 25,
+  min_target_cells = 5,
+  min_ref_cells = 25,
+  max_ref_cells = 3000,
   n.cores = 20,
+  seed = 123,
   KS.cut = 0.1,
   ngene.chr = 5,
   win.size = 25,
@@ -23,58 +29,46 @@ runCopyKAT(
 \arguments{
 \item{sce}{A Seurat object.}
 
-\item{target_class}{String. The cell type to investigate (e.g., "Epithelial").}
+\item{target_class}{String. The cell type to investigate.}
 
-\item{ref_classes}{Vector of strings. The normal reference cell types (e.g., c("T_cell", "Myeloid")).}
+\item{ref_classes}{Vector of strings. The normal reference cell types.}
 
 \item{sample_col}{String. Metadata column for sample IDs. Default: "orig.ident".}
 
 \item{celltype_col}{String. Metadata column for cell types. Default: "celltype".}
 
+\item{assay}{String. Assay to use. Default: "RNA".}
+
 \item{output_dir}{String. Directory to save results. Default: "./CopyKAT".}
 
 \item{overwrite}{Logical. If TRUE, re-runs existing samples. Default: FALSE.}
 
-\item{min_cells}{Integer. Minimum cells required per sample (target + ref). Default: 25.}
+\item{ref_mode}{String. "sample" for per-sample references; "shared" for global shared reference. Default: "sample".}
+
+\item{min_cells}{Integer. Minimum reference cells required in sample mode. Default: 25.}
+
+\item{min_target_cells}{Integer. Minimum target cells required per sample. Default: 5.}
+
+\item{min_ref_cells}{Integer. Minimum reference cells required. In shared mode, refers to global ref size. Default: 25.}
+
+\item{max_ref_cells}{Integer or NULL. In shared mode, optionally downsample global refs to this size. Default: 3000.}
 
 \item{n.cores}{Integer. Number of cores. Default: 20.}
 
-\item{...}{Additional arguments passed to copykat() (e.g., KS.cut, ngene.chr).}
+\item{seed}{Integer. Random seed for shared reference downsampling. Default: 123.}
+
+\item{KS.cut}{Numeric. Passed to copykat().}
+
+\item{ngene.chr}{Integer. Passed to copykat().}
+
+\item{win.size}{Integer. Passed to copykat().}
+
+\item{...}{Additional arguments passed to copykat().}
 }
 \value{
-Invisible data.frame of the combined results. Main output is the CSV file.
+Invisible data.frame of the combined results.
 }
 \description{
 Runs CopyKAT on a Seurat object sample by sample.
-}
-\examples{
-\dontrun{
-  # 1. Basic Run
-  # Results will be saved to "./CopyKAT/AllSamples_CopyKAT_prediction.csv"
-  runCopyKAT(
-    sce = sce_full,
-    target_class = "Epithelial",
-    ref_classes = c("T_cell", "Macrophage"),
-    n.cores = 10
-  )
-
-  # 2. Advanced: Manual Annotation (How to use the output)
-  # Since the function doesn't return a Seurat object, do this afterwards:
-
-  # a) Read the generated CSV
-  res <- read.csv("./CopyKAT/AllSamples_CopyKAT_prediction.csv")
-
-  # b) Check match rate (using the auto-cleaned ID)
-  print(mean(res$cleaned_id \%in\% colnames(sce_full)))
-
-  # c) Add to Seurat (Safe Join)
-  library(tidyverse)
-  meta_to_add <- res \%>\%
-     distinct(cleaned_id, .keep_all = TRUE) \%>\%
-     column_to_rownames("cleaned_id") \%>\%
-     select(copykat.pred)
-
-  sce_full <- AddMetaData(sce_full, meta_to_add)
-  DimPlot(sce_full, group.by="copykat.pred")
-}
+Supports either sample-specific references or a shared global reference pool.
 }

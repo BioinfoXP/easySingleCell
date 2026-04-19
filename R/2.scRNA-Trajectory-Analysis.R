@@ -148,81 +148,53 @@ runMonocleAnalysis <- function(scRNA,
 
 # ========= CytoTRACE =========
 # ========= 2. CytoTRACE Trajectory Analysis (Optimized) =========
-
-#' Run CytoTRACE Analysis
+#' Run CytoTRACE Analysis (Simplified)
 #'
-#' @description Performs CytoTRACE analysis to predict differentiation states
-#' using a silent, namespace-safe implementation.
-#'
-#' @param scRNA A Seurat object.
-#' @param celltype Metadata column for cell type annotation. Default "celltype".
-#' @param output_data_dir Path for saving .Rdata results. Default "./output_data/".
-#' @param output_figure_dir Path for saving plots. Default "./output_figure/".
-#' @param emb Dimensionality reduction key (e.g., "umap") for visualization.
-#' @param ncores Number of CPU cores. Default 5.
-#' @param force_run Logical. If TRUE, ignores existing results and reruns analysis.
-#'
-#' @importFrom Seurat GetAssayData
-#' @importFrom CytoTRACE CytoTRACE plotCytoTRACE
+#' @description A streamlined wrapper for CytoTRACE analysis on Seurat objects.
 #' @export
 runCytoTRACEAnalysis <- function(scRNA,
-                                 celltype = 'celltype',
-                                 output_data_dir = "./output_data/",
-                                 output_figure_dir = "./output_figure/",
-                                 emb = 'umap',
-                                 ncores = 5,
-                                 force_run = FALSE) {
+                                 group.by = 'celltype',
+                                 outdir = "./CytoTRACE_results",
+                                 ncores = 8) {
 
-  # 1. Environment Preparation
-  if (!base::dir.exists(output_data_dir)) base::dir.create(output_data_dir, recursive = TRUE)
-  if (!base::dir.exists(output_figure_dir)) base::dir.create(output_figure_dir, recursive = TRUE)
+  # 0. 依赖检查
+  require(Seurat)
+  require(CytoTRACE)
 
-  # 2. Input Validation
-  if (!base::inherits(scRNA, "Seurat")) base::stop("Input 'scRNA' must be a Seurat object.")
-  if (!celltype %in% base::colnames(scRNA@meta.data)) base::stop(base::paste0("Column '", celltype, "' not found in metadata."))
+  # 1. 路径准备 (合并数据和图表到一个目录，减少文件夹层级)
+  if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE)
+  result_file <- file.path(outdir, "CytoTRACE_obj.rds")
 
-  if (!emb %in% base::names(scRNA@reductions)) {
-    base::stop(base::paste0("Reduction '", emb, "' not found in Seurat object."))
-  }
-
-  # 3. Prepare Phenotype Data
-  # Extract phenotype vector matching cell names
-  phe <- base::as.character(scRNA@meta.data[[celltype]])
-  base::names(phe) <- base::rownames(scRNA@meta.data)
-
-  # 4. Analysis Execution (with Caching)
-  results_file <- base::file.path(output_data_dir, "Cytotrace_results.Rdata")
-
-  if (base::file.exists(results_file) && !force_run) {
-    base::message("Loading existing CytoTRACE results...")
-    # Variable 'results' will be loaded into environment
-    base::load(results_file)
-
-    # Check if loaded results match current cells (basic validation)
-    if (!base::exists("results")) base::stop("Loaded file does not contain 'results' object.")
-
+  # 2. 核心逻辑：有缓存读缓存，没缓存跑分析
+  if (file.exists(result_file)) {
+    message(">>> Loading cached CytoTRACE results...")
+    results <- readRDS(result_file)
   } else {
-    base::message("Running CytoTRACE analysis (this may take time)...")
+    message(">>> Running CytoTRACE (this may take a while)...")
 
-    # Secure data extraction using Seurat accessor
-    # CytoTRACE requires a raw count matrix (genes x cells)
-    mat_counts <- base::as.matrix(Seurat::GetAssayData(scRNA, assay = "RNA", slot = "counts"))
+    # 获取表达矩阵 (自动处理 Assay，无需硬编码 "RNA")
+    # 注意：CytoTRACE 官方建议使用 raw counts，但很多场景下 matrix 转换极其消耗内存
+    # 这里为了兼容性转为 matrix，但建议大图数据注意内存
+    mat <- as.matrix(GetAssayData(scRNA, slot = "counts"))
 
-    # Run core analysis
-    results <- CytoTRACE::CytoTRACE(mat = mat_counts, ncores = ncores)
-
-    base::save(results, file = results_file)
-    base::message("Analysis saved to ", results_file)
+    # 运行分析
+    results <- CytoTRACE(mat = mat, ncores = ncores, subsamplesize = 1000) # 可选：subsamplesize 加速
+    saveRDS(results, file = result_file)
   }
 
-  # 5. Visualization
-  # plotCytoTRACE automatically generates PDFs in the output directory
-  base::message("Generating plots in ", output_figure_dir)
+  # 3. 可视化
+  message(">>> Generating plots...")
 
-  CytoTRACE::plotCytoTRACE(
-    results,
-    outputDir = output_figure_dir,
-    emb = scRNA@reductions[[emb]]@cell.embeddings,
-    phenotype = phe
-  )
+  # 准备表型数据
+  phenotype <- as.character(scRNA[[group.by]][,1])
+  names(phenotype) <- colnames(scRNA)
+
+  # 准备降维数据 (自动查找 umap 或 tsne)
+  emb <- if ("umap" %in% names(scRNA@reductions)) Embeddings(scRNA, "umap") else Embeddings(scRNA, "tsne")
+
+  # 绘图
+  plotCytoTRACE(results, phenotype = phenotype, emb = emb, outputDir = outdir)
+
+  message(">>> Done! Check: ", outdir)
+  return(results)
 }

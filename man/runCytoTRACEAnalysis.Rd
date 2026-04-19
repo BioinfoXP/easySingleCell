@@ -2,34 +2,15 @@
 % Please edit documentation in R/2.scRNA-Trajectory-Analysis.R
 \name{runCytoTRACEAnalysis}
 \alias{runCytoTRACEAnalysis}
-\title{Run CytoTRACE Analysis}
+\title{Run CytoTRACE Analysis (Simplified)}
 \usage{
 runCytoTRACEAnalysis(
   scRNA,
-  celltype = "celltype",
-  output_data_dir = "./output_data/",
-  output_figure_dir = "./output_figure/",
-  emb = "umap",
-  ncores = 5,
-  force_run = FALSE
+  group.by = "celltype",
+  outdir = "./CytoTRACE_results",
+  ncores = 8
 )
 }
-\arguments{
-\item{scRNA}{A Seurat object.}
-
-\item{celltype}{Metadata column for cell type annotation. Default "celltype".}
-
-\item{output_data_dir}{Path for saving .Rdata results. Default "./output_data/".}
-
-\item{output_figure_dir}{Path for saving plots. Default "./output_figure/".}
-
-\item{emb}{Dimensionality reduction key (e.g., "umap") for visualization.}
-
-\item{ncores}{Number of CPU cores. Default 5.}
-
-\item{force_run}{Logical. If TRUE, ignores existing results and reruns analysis.}
-}
 \description{
-Performs CytoTRACE analysis to predict differentiation states
-using a silent, namespace-safe implementation.
+A streamlined wrapper for CytoTRACE analysis on Seurat objects.
 }

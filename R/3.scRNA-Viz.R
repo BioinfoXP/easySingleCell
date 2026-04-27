@@ -1286,7 +1286,43 @@ scVisCellRatio <- function(sce,
 
 
 # ========= scVisVlnPlot =========
-# ========= 9.scVisVlnPlot =========
+# ========= 9. scVisVlnPlot =========
+
+#' @title scVis: Intelligent VlnPlot (Fully Automated & SCI Styled)
+#' @description A high-end, minimalist violin plot builder designed for Seurat V4/V5 data.
+#' Features automatic pairwise comparisons, flat significance brackets, and publication-ready
+#' SCI styling (Arial font, bold borders, no inner points). Parameters are perfectly aligned
+#' with Seurat's native ecosystem.
+#'
+#' @param sce A Seurat object.
+#' @param features Vector of feature names to plot.
+#' @param group.by String. Name of the metadata column for X-axis grouping. Defaults to Idents.
+#' @param split.by String. Name of the metadata column to split/dodge violins.
+#' @param comparisons Vector or List. Specific pairs to compare. If NULL and auto_compare is TRUE, pairs are auto-generated.
+#' @param auto_compare Logical. If TRUE, automatically computes all pairwise combinations for the active groups.
+#' @param palette Vector. Custom color palette. Defaults to a standard SCI publication palette.
+#' @param pt_size Numeric. Size of jitter points. Default is 0 (hidden) for a clean visual.
+#' @param legend_position String. Position of the legend ("none", "right", "bottom", "top"). Default is "none".
+#' @param ncol Numeric. Number of columns for the patchwork layout.
+#' @param sign_method String. Statistical test to use ("wilcox.test" or "t.test"). Default is "wilcox.test".
+#' @param sign_label String. Format of significance labels ("p.signif" for stars, "p.format" for p-values).
+#' @param hide_ns Logical. If TRUE, hides non-significant comparison brackets.
+#' @param assay String. Specific assay to pull data from (e.g., "RNA", "SCT").
+#' @param layer String. Specific layer to pull data from in Seurat V5 (e.g., "data", "counts").
+#' @param base_size Numeric. Base font size for ggplot theme. Default is 15.
+#' @param ... Additional arguments passed to specific internal functions.
+#'
+#' @return A combined patchwork ggplot object containing the styled violin plots.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # 1. Basic auto pairwise comparison
+#' p <- scVisVlnPlot(sce.endo, features = c("PLVAP", "CLDN5"), group.by = "Group", auto_compare = TRUE)
+#'
+#' # 2. Split by condition
+#' p <- scVisVlnPlot(sce.endo, features = "ANGPT2", group.by = "celltype", split.by = "Condition")
+#' }
 scVisVlnPlot <- function(sce,
                          features,
                          group.by = NULL,

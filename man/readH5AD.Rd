@@ -4,7 +4,21 @@
 \alias{readH5AD}
 \title{Read H5AD file to Seurat Object (Fixed Version)}
 \usage{
-readH5AD(file, data_type = "X", assay = "RNA", verbose = TRUE)
+readH5AD(
+  file,
+  data_type = "X",
+  assay = "RNA",
+  project = NULL,
+  verbose = TRUE,
+  import_obsm = TRUE,
+  import_uns = FALSE,
+  store_non_reduction_obsm_as_meta = TRUE,
+  skip_obsm_patterns = c("^spatial$", "fate_prob", "trend", "gene", "impute",
+    "expression"),
+  reduction_patterns = c("pca", "umap", "tsne", "diffmap", "diffusion", "dm_", "lsi",
+    "ica"),
+  make_unique_features = TRUE
+)
 }
 \arguments{
 \item{file}{Path to the .h5ad file.}

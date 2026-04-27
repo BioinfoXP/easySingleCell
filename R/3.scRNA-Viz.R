@@ -130,7 +130,7 @@ scVisDimPlot <- function(scRNA,
                          group.by = NULL,
                          split.by = NULL,
                          colors = NULL,
-                         pt.size = 0.15,
+                         pt.size = 1,
                          stroke = 0,
                          alpha = 1,
                          show.arrow = TRUE,
@@ -416,7 +416,7 @@ scVisDotPlot <- function(object,
     ggplot2::theme_bw() +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = rot_angle, hjust = 1, vjust = if(rot_angle==45) 1 else 0.5,
-                                          face = "italic", color = "black", size = font.size),
+                                          color = "black", size = font.size),
       axis.text.y = ggplot2::element_text(color = "black", size = font.size),
       axis.title = ggplot2::element_blank(),
       panel.grid.major = ggplot2::element_line(color = "grey90", linewidth = 0.2),
@@ -1286,211 +1286,104 @@ scVisCellRatio <- function(sce,
 
 
 # ========= scVisVlnPlot =========
-# ========= 9. scVisVlnPlot =========
-#' @title scVis: Intelligent VlnPlot (Split-Stats & Legend Support)
-#' @description A robust violin plot builder that handles Seurat V4/V5 data.
-#' Features "Smart Stats": Automatically detects if you want to compare X-axis groups
-#' OR split-by groups (e.g., Control vs Disease within cell types).
-#'
-#' @param sce A Seurat object.
-#' @param features Vector of feature names.
-#' @param group_col String. X-axis grouping (e.g., cell type).
-#' @param split_by String. Column to split/fill violins by (e.g., "Condition").
-#' @param comparisons Vector/List. Pairs to compare. Can be groups (X-axis) OR conditions (Split-by).
-#' @param palette Vector. Custom colors.
-#' @param pt_size Numeric. Size of jitter points.
-#' @param legend_position String. "right", "top", "bottom", "none", etc.
-#' @param ncol Numeric. Number of columns.
-#' @param sign_method String. "wilcox.test" or "t.test".
-#' @param sign_label String. "p.signif" (stars) or "p.format" (numbers).
-#' @param hide_ns Logical. Hide non-significant results.
-#' @param ... Additional arguments (ignored safely).
-#'
-#' @return A patchwork ggplot object.
-#' @export
-#'
-#' @importFrom Seurat FetchData Idents
-#' @importFrom ggplot2 ggplot aes geom_violin geom_point stat_summary theme_classic labs scale_fill_manual scale_y_continuous expansion position_jitterdodge position_dodge theme element_text
-#' @importFrom ggpubr stat_compare_means compare_means
-#' @importFrom patchwork wrap_plots
-#' @importFrom rlang .data
-#'
-#' @examples
-#' \dontrun{
-#'   # 1. Split Comparison (Control vs PCOS within each cell type)
-#'   scVisVlnPlot(sce, "Gdf15", group_col = "celltype", split_by = "group",
-#'                comparisons = c("Control", "PCOS"), legend_position = "top")
-#' }
+# ========= 9.scVisVlnPlot =========
 scVisVlnPlot <- function(sce,
                          features,
-                         group_col = NULL,
-                         split_by = NULL,
+                         group.by = NULL,
+                         split.by = NULL,
                          comparisons = NULL,
+                         auto_compare = FALSE,
                          palette = NULL,
-                         pt_size = 0.1,
-                         legend_position = "right",
+                         pt_size = 0,
+                         legend_position = "none",
                          ncol = NULL,
                          sign_method = "wilcox.test",
                          sign_label = "p.signif",
                          hide_ns = FALSE,
+                         assay = NULL,
+                         layer = NULL,
+                         base_size = 15,
                          ...) {
 
-  # --- 1. Catch split.by in ... ---
+  # 1. 参数对齐与基础设置
   args <- list(...)
-  if (is.null(split_by) && "split.by" %in% names(args)) split_by <- args$split.by
+  if (is.null(group.by)) group.by <- "scVis_ident"
+  if (is.null(sce@meta.data[[group.by]])) sce[[group.by]] <- Seurat::Idents(sce)
 
-  # --- 2. Validation ---
-  if (missing(sce) || is.null(sce)) stop("❌ Input 'sce' is missing.")
-  if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' required.")
+  if (is.null(split.by) && "split_by" %in% names(args)) split.by <- args$split_by
+  if ("pt.size" %in% names(args)) pt_size <- args$pt.size
 
-  # Set Group Column
-  if (is.null(group_col)) {
-    sce$scVis_ident <- Seurat::Idents(sce)
-    group_col <- "scVis_ident"
-  } else if (!group_col %in% colnames(sce@meta.data)) {
-    stop(paste0("❌ Group column '", group_col, "' not found."))
-  }
-
-  # Set Split Column & Colors
-  color_by <- if (!is.null(split_by)) split_by else group_col
-  if (!is.null(split_by) && !split_by %in% colnames(sce@meta.data)) stop(paste0("❌ Split column '", split_by, "' not found."))
-
-  # Palette Logic
-  unique_colors <- unique(sce@meta.data[[color_by]])
-  n_colors <- length(unique_colors)
+  # 2. 调色盘逻辑
+  color_by <- if (!is.null(split.by)) split.by else group.by
+  lvls <- levels(as.factor(sce@meta.data[[color_by]]))
   if (is.null(palette)) {
-    default_pal <- c("#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F", "#8491B4", "#91D1C2")
-    palette <- if (n_colors > length(default_pal)) scales::hue_pal()(n_colors) else default_pal[1:n_colors]
-  }
-  if (is.null(names(palette))) names(palette) <- unique_colors[1:length(palette)]
-
-  # --- 3. Comparisons Pre-processing ---
-  # Normalize comparisons to list
-  if (!is.null(comparisons) && is.atomic(comparisons) && !is.list(comparisons)) {
-    comparisons <- list(comparisons)
+    palette <- c("Adjacent" = "#D5DBDB", "Tumor-MVI-" = "#5DADE2", "Tumor-MVI+" = "#E74C3C")
+    if (!all(names(palette) %in% lvls)) palette <- grDevices::hcl.colors(length(lvls), "Dark 3")
   }
 
-  # --- 4. Plot Loop ---
+  # 3. 自动化比较
+  if (is.null(comparisons) && auto_compare) {
+    comp_lvls <- if (is.null(split.by)) lvls else levels(as.factor(sce@meta.data[[split.by]]))
+    if (length(comp_lvls) >= 2) comparisons <- utils::combn(comp_lvls, 2, simplify = FALSE)
+  }
+  if (!is.null(comparisons) && !is.list(comparisons)) comparisons <- list(comparisons)
+
+  # 4. 绘图循环
   plot_list <- list()
+  for (feature in features) {
+    dat <- Seurat::FetchData(sce, vars = c(feature, group.by, split.by), assay = assay, layer = layer)
+    colnames(dat)[1:2] <- c("expression", "group")
+    if (!is.null(split.by)) colnames(dat)[3] <- "split"
 
-  for (gene in features) {
-    # Fetch Data (Crash-Proof)
-    fetch_vars <- c(gene, group_col, split_by)
-    plot_data <- tryCatch({ Seurat::FetchData(sce, vars = fetch_vars) }, error = function(e) NULL)
+    dat <- dat[is.finite(dat$expression), ]
+    dat$group <- factor(dat$group)
+    if (!is.null(split.by)) dat$split <- factor(dat$split)
 
-    if (is.null(plot_data)) { message(paste("⚠️ Skip:", gene)); next }
+    p <- ggplot2::ggplot(dat, ggplot2::aes(x = group, y = expression))
 
-    # Normalize Columns
-    colnames(plot_data)[1] <- "expression"
-    colnames(plot_data)[2] <- "group"
-    if (!is.null(split_by)) colnames(plot_data)[3] <- "split"
-
-    plot_data <- plot_data[is.finite(plot_data$expression), ]
-    plot_data$group <- as.factor(plot_data$group)
-    if (!is.null(split_by)) plot_data$split <- as.factor(plot_data$split)
-
-    # --- Build Plot ---
-    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$group, y = .data$expression))
-
-    if (!is.null(split_by)) {
-      p <- p + ggplot2::aes(fill = .data$split)
-      # Split Mode Jitter
-      if (pt_size > 0) {
-        p <- p + ggplot2::geom_point(position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.9),
-                                     size = pt_size, alpha = 0.6, show.legend = FALSE)
-      }
+    if (is.null(split.by)) {
+      p <- p + ggplot2::aes(fill = group)
+      if (pt_size > 0) p <- p + ggplot2::geom_jitter(width = 0.18, size = pt_size, alpha = 0.45, show.legend = FALSE)
     } else {
-      p <- p + ggplot2::aes(fill = .data$group)
-      # Normal Mode Jitter
-      if (pt_size > 0) {
-        p <- p + ggplot2::geom_jitter(width = 0.2, size = pt_size, alpha = 0.6, show.legend = FALSE)
-      }
+      p <- p + ggplot2::aes(fill = split)
+      if (pt_size > 0) p <- p + ggplot2::geom_point(position = ggplot2::position_jitterdodge(0.15, dodge.width = 0.85), size = pt_size, alpha = 0.45, show.legend = FALSE)
     }
 
     p <- p +
-      ggplot2::geom_violin(scale = "width", trim = TRUE, alpha = 0.8,
-                           position = ggplot2::position_dodge(width = 0.9),
-                           size = 0.4, color = "black") +
-      ggplot2::stat_summary(fun = mean, geom = "point", shape = 21, size = 2, fill = "white", color = "black",
-                            position = ggplot2::position_dodge(width = 0.9), show.legend = FALSE) +
+      ggplot2::geom_violin(scale = "width", trim = TRUE, alpha = 0.9, linewidth = 0.6, position = ggplot2::position_dodge(0.85)) +
       ggplot2::scale_fill_manual(values = palette) +
-      ggplot2::theme_classic() +
-      ggplot2::labs(title = gene, x = NULL, y = "Expression", fill = if(!is.null(split_by)) split_by else group_col) +
+      ggplot2::theme_bw(base_size = base_size) +
       ggplot2::theme(
-        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold.italic"),
-        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black"),
-        legend.position = legend_position # <--- Applies user setting
-      )
+        text = ggplot2::element_text(family = "Arial", color = "black"),
+        panel.grid = ggplot2::element_blank(),
+        panel.border = ggplot2::element_rect(linewidth = 1.2, fill = NA),
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, face = "bold", size = base_size - 1),
+        axis.text.y = ggplot2::element_text(face = "bold", size = base_size - 1),
+        axis.title = ggplot2::element_blank(),
+        axis.ticks = ggplot2::element_line(linewidth = 1),
+        axis.ticks.length = ggplot2::unit(0.2, "cm"),
+        plot.title = ggplot2::element_text(hjust = 0, size = base_size + 3, margin = ggplot2::margin(b = 10)),
+        legend.position = legend_position
+      ) +
+      ggplot2::labs(title = feature)
 
-    # --- Smart Statistics Logic ---
+    # 5. 统计
     if (!is.null(comparisons)) {
+      v_just <- ifelse(sign_label %in% c("p.signif", "p.adj.signif"), 0.4, 0.55)
 
-      # Determine Compare Mode: "Split" vs "Group"
-      mode <- "group" # Default
-      flat_comps <- unique(unlist(comparisons))
-
-      if (!is.null(split_by)) {
-        # Check if requested comparisons exist in the split column (e.g. "Control", "PCOS")
-        if (all(flat_comps %in% levels(plot_data$split))) {
-          mode <- "split"
-        }
-      }
-
-      if (mode == "split") {
-        # --- Mode A: Compare Splits (Control vs PCOS) ---
-        # Note: stat_compare_means with 'group' aesthetic works best with simple labels, not brackets, for dodged plots
-        p <- p + ggpubr::stat_compare_means(
-          ggplot2::aes(group = .data$split),
-          method = sign_method,
-          label = sign_label, # e.g. "****"
-          label.y.npc = "top", # Put labels at top
-          hide.ns = hide_ns,
-          vjust = -0.5
-        )
-        # Increase Y limit slightly to fit labels
-        p <- p + ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.15)))
-
+      if (is.null(split.by)) {
+        p <- p + ggpubr::stat_compare_means(comparisons = comparisons, method = sign_method, label = sign_label,
+                                            hide.ns = hide_ns, tip.length = 0, step.increase = 0.12, vjust = v_just, size = 4) +
+          ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.1 + length(comparisons) * 0.1)))
       } else {
-        # --- Mode B: Compare Groups (Endothelial vs Immune) ---
-        # Existing logic for X-axis comparisons
-
-        valid_comps <- list()
-        counts <- table(plot_data$group)
-        for (pair in comparisons) {
-          # Ensure groups exist and have cells
-          if (all(pair %in% names(counts)) && all(counts[pair] >= 3)) {
-            valid_comps <- c(valid_comps, list(pair))
-          }
-        }
-
-        # Filter Significant
-        final_comps <- valid_comps
-        if (hide_ns && length(valid_comps) > 0) {
-          tryCatch({
-            # Simple pre-test
-            res <- ggpubr::compare_means(expression ~ group, data = plot_data, method = sign_method)
-            sig_res <- res[res$p < 0.05, ]
-            keep_idx <- which(sapply(valid_comps, function(pr) {
-              any((sig_res$group1 == pr[1] & sig_res$group2 == pr[2]) |
-                    (sig_res$group1 == pr[2] & sig_res$group2 == pr[1]))
-            }))
-            final_comps <- valid_comps[keep_idx]
-          }, error = function(e) NULL)
-        }
-
-        if (length(final_comps) > 0) {
-          p <- p + ggpubr::stat_compare_means(
-            comparisons = final_comps,
-            method = sign_method,
-            label = sign_label,
-            vjust = 0.5
-          ) + ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.1 + length(final_comps)*0.1)))
-        }
+        p <- p + ggpubr::stat_compare_means(ggplot2::aes(group = split), method = sign_method, label = sign_label,
+                                            hide.ns = hide_ns, label.y.npc = "top", vjust = -0.3, size = 4) +
+          ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.25)))
       }
     }
-    plot_list[[gene]] <- p
+    plot_list[[feature]] <- p
   }
 
-  if (is.null(ncol)) ncol <- min(length(plot_list), 3)
+  if (is.null(ncol)) ncol <- min(length(plot_list), 4)
   patchwork::wrap_plots(plot_list, ncol = ncol)
 }

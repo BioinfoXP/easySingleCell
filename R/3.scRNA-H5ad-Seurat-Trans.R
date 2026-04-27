@@ -14,164 +14,395 @@
 #'
 #' @return A Seurat object.
 #' @export
-readH5AD <- function(file, data_type = "X", assay = "RNA", verbose = TRUE) {
+readH5AD <- function(
+    file,
+    data_type = "X",
+    assay = "RNA",
+    project = NULL,
+    verbose = TRUE,
+    import_obsm = TRUE,
+    import_uns = FALSE,
+    store_non_reduction_obsm_as_meta = TRUE,
+    skip_obsm_patterns = c("^spatial$", "fate_prob", "trend", "gene", "impute", "expression"),
+    reduction_patterns = c("pca", "umap", "tsne", "diffmap", "diffusion", "dm_", "lsi", "ica"),
+    make_unique_features = TRUE
+) {
 
-  # 1. 检查依赖与文件
-  if (!requireNamespace("reticulate", quietly = TRUE)) {
-    stop("Package 'reticulate' is required. Please install it.")
+  # ============================================================================
+  # 0. 检查依赖
+  # ============================================================================
+  required_pkgs <- c("reticulate", "Matrix", "Seurat")
+  missing_pkgs <- required_pkgs[!vapply(required_pkgs, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(missing_pkgs) > 0) {
+    stop("Missing required packages: ", paste(missing_pkgs, collapse = ", "))
   }
+
   if (!file.exists(file)) {
     stop("File not found: ", file)
   }
 
-  # 加载 Python 模块
-  ad <- reticulate::import("anndata", convert = FALSE)
-  builtins <- reticulate::import_builtins(convert = FALSE) # 加载 Python 内置函数
-
-  if (verbose) message("Reading H5AD file: ", file)
-  adata <- ad$read_h5ad(file)
-
   # ============================================================================
-  # 2. 确定读取的数据源 (X / raw / layers)
+  # 1. 工具函数
   # ============================================================================
-  matrix_data <- NULL
-  var_names_py <- NULL
+  .msg <- function(...) {
+    if (isTRUE(verbose)) message(...)
+  }
 
-  # --- 辅助函数：安全检查 raw 是否存在 ---
-  check_raw_exists <- function(a) {
+  .warn <- function(...) {
+    warning(..., call. = FALSE)
+  }
+
+  .safe_py_to_r <- function(x, default = NULL) {
+    tryCatch(
+      reticulate::py_to_r(x),
+      error = function(e) default
+    )
+  }
+
+  .check_raw_exists <- function(a) {
     tryCatch({
       !is.null(a$raw) && !is.null(a$raw$X)
     }, error = function(e) FALSE)
   }
 
-  # --- 情况 A: 请求 "raw" ---
-  if (data_type == "raw") {
-    if (check_raw_exists(adata)) {
-      if (verbose) message("Using raw counts from adata.raw.X")
-      matrix_data <- adata$raw$X
-      var_names_py <- adata$raw$var_names
+  .to_sparse_feature_by_cell <- function(x) {
+    # x 预期是 cells x genes，需要转成 genes x cells
+    xr <- reticulate::py_to_r(x)
+
+    if (inherits(xr, "dgRMatrix")) {
+      xr <- as(xr, "CsparseMatrix")
+    } else if (inherits(xr, "dgCMatrix")) {
+      # do nothing
+    } else if (inherits(xr, "sparseMatrix")) {
+      xr <- as(xr, "CsparseMatrix")
     } else {
-      warning("adata.raw not found or empty. Falling back to adata.X")
-      data_type <- "X" # 降级
+      xr <- as(as.matrix(xr), "CsparseMatrix")
     }
+
+    Matrix::t(xr)
   }
 
-  # --- 情况 B: 请求 Layers (非 X 非 raw) ---
-  if (data_type != "X" && data_type != "raw") {
-    # 【修复重点】确保 layers_keys 是一个 R 向量
-    layers_keys <- tryCatch({
-      # 1. 先用 Python 的 list() 转换 dict_keys
-      keys_py <- builtins$list(adata$layers$keys())
-      # 2. 转为 R 对象
+  .to_numeric_matrix <- function(x) {
+    if (is.null(x)) return(NULL)
+
+    if (is.data.frame(x)) {
+      bad_cols <- vapply(x, is.list, logical(1))
+      if (any(bad_cols)) return(NULL)
+      x <- data.matrix(x)
+    } else if (is.vector(x) && !is.list(x)) {
+      x <- matrix(x, ncol = 1)
+    } else if (!is.matrix(x)) {
+      x <- tryCatch(as.matrix(x), error = function(e) NULL)
+    }
+
+    if (is.null(x)) return(NULL)
+    if (length(dim(x)) != 2) return(NULL)
+
+    suppressWarnings(storage.mode(x) <- "numeric")
+    x <- as.matrix(x)
+
+    if (!is.numeric(x)) return(NULL)
+    if (nrow(x) == 0 || ncol(x) == 0) return(NULL)
+
+    x
+  }
+
+  .make_unique_case_insensitive <- function(name, existing_names) {
+    out <- name
+    i <- 1
+    while (tolower(out) %in% tolower(existing_names)) {
+      i <- i + 1
+      out <- paste0(name, "_", i)
+    }
+    out
+  }
+
+  .clean_reduction_name <- function(x) {
+    x <- gsub("^X_", "", x)
+    x <- gsub("[^A-Za-z0-9_]", "_", x)
+    x
+  }
+
+  .make_seurat_key <- function(red_name) {
+    key <- toupper(gsub("[^A-Za-z0-9]", "", red_name))
+    paste0(key, "_")
+  }
+
+  .matches_any_pattern <- function(x, patterns) {
+    any(vapply(patterns, function(p) grepl(p, x, ignore.case = TRUE), logical(1)))
+  }
+
+  .is_reduction_like <- function(name, patterns) {
+    .matches_any_pattern(name, patterns)
+  }
+
+  .should_skip_obsm <- function(name, patterns) {
+    .matches_any_pattern(name, patterns)
+  }
+
+  .safe_get_keys <- function(mapping_obj) {
+    tryCatch({
+      builtins <- reticulate::import_builtins(convert = FALSE)
+      keys_py <- builtins$list(mapping_obj$keys())
       keys_r <- reticulate::py_to_r(keys_py)
-      # 3. 确保打平为向量 (unlist)
       unlist(keys_r)
     }, error = function(e) character(0))
+  }
 
-    if (data_type %in% layers_keys) {
-      if (verbose) message(sprintf("Using data from adata.layers['%s']", data_type))
-      matrix_data <- adata$layers$get(data_type)
-      var_names_py <- adata$var_names
+  # ============================================================================
+  # 2. 读取 h5ad
+  # ============================================================================
+  .msg("Reading H5AD file: ", file)
+
+  ad <- reticulate::import("anndata", convert = FALSE)
+  adata <- ad$read_h5ad(file)
+
+  # ============================================================================
+  # 3. 选择表达矩阵来源
+  # ============================================================================
+  matrix_data <- NULL
+  var_names_py <- NULL
+  data_source_used <- NULL
+
+  if (identical(data_type, "raw")) {
+    if (.check_raw_exists(adata)) {
+      .msg("Using raw counts from adata.raw.X")
+      matrix_data <- adata$raw$X
+      var_names_py <- adata$raw$var_names
+      data_source_used <- "raw"
     } else {
-      # 如果 layers_keys 是 NULL，使用空字符避免打印报错
-      avail_keys <- if (is.null(layers_keys)) "None" else paste(layers_keys, collapse=", ")
-      warning(sprintf("Layer '%s' not found. Available: [%s]. Falling back to adata.X",
-                      data_type, avail_keys))
-      data_type <- "X" # 降级
+      .warn("adata.raw not found or empty. Falling back to adata.X")
+      data_type <- "X"
     }
   }
 
-  # --- 情况 C: 请求 "X" (或回退到 X) ---
-  if (data_type == "X") {
-    if (verbose) message("Using matrix from adata.X")
+  if (!identical(data_type, "X") && !identical(data_type, "raw")) {
+    layer_keys <- .safe_get_keys(adata$layers)
+
+    if (data_type %in% layer_keys) {
+      .msg("Using data from adata.layers['", data_type, "']")
+      matrix_data <- adata$layers$get(data_type)
+      var_names_py <- adata$var_names
+      data_source_used <- paste0("layer:", data_type)
+    } else {
+      avail_keys <- if (length(layer_keys) == 0) "None" else paste(layer_keys, collapse = ", ")
+      .warn("Layer '", data_type, "' not found. Available: [", avail_keys, "]. Falling back to adata.X")
+      data_type <- "X"
+    }
+  }
+
+  if (identical(data_type, "X")) {
+    .msg("Using matrix from adata.X")
     matrix_data <- adata$X
     var_names_py <- adata$var_names
+    data_source_used <- "X"
+  }
+
+  if (is.null(matrix_data)) {
+    stop("Failed to retrieve matrix data from h5ad.")
   }
 
   # ============================================================================
-  # 3. 矩阵转换 (内存安全)
+  # 4. 表达矩阵转换
   # ============================================================================
-  if (verbose) message("Converting matrix to sparse format...")
-  counts <- reticulate::py_to_r(matrix_data)
+  .msg("Converting matrix to sparse format...")
+  counts <- .to_sparse_feature_by_cell(matrix_data)
 
-  # 强制转为 dgCMatrix (R 标准稀疏格式)
-  if (inherits(counts, "dgRMatrix")) {
-    counts <- as(counts, "CsparseMatrix")
-  } else if (!inherits(counts, "sparseMatrix")) {
-    counts <- as(as.matrix(counts), "CsparseMatrix")
+  # obs / var names
+  obs_names <- .safe_py_to_r(adata$obs_names$to_list())
+  var_names <- .safe_py_to_r(var_names_py$to_list())
+
+  if (is.null(obs_names) || is.null(var_names)) {
+    stop("Failed to retrieve obs_names or var_names from AnnData object.")
   }
 
-  # 转置: AnnData (Cells x Genes) -> Seurat (Genes x Cells)
-  counts <- Matrix::t(counts)
+  obs_names <- as.character(obs_names)
+  var_names <- as.character(var_names)
 
-  # 4. 处理行名和列名
-  obs_names <- reticulate::py_to_r(adata$obs_names$to_list())
-  var_names <- reticulate::py_to_r(var_names_py$to_list())
+  if (length(obs_names) != ncol(counts)) {
+    stop("Cell names length does not match matrix columns: ",
+         length(obs_names), " vs ", ncol(counts))
+  }
 
-  # 基因名去重
-  if (any(duplicated(var_names))) {
-    warning("Duplicate gene names found. Making them unique.")
-    var_names <- make.unique(as.character(var_names))
+  if (length(var_names) != nrow(counts)) {
+    stop("Feature names length does not match matrix rows: ",
+         length(var_names), " vs ", nrow(counts))
+  }
+
+  if (anyDuplicated(var_names) > 0) {
+    if (isTRUE(make_unique_features)) {
+      .warn("Duplicate gene names found. Making them unique.")
+      var_names <- make.unique(var_names)
+    } else {
+      .warn("Duplicate gene names found. Seurat may fail unless names are unique.")
+    }
   }
 
   rownames(counts) <- var_names
   colnames(counts) <- obs_names
 
-  # 5. 元数据
-  if (verbose) message("Processing metadata...")
-  meta_data <- reticulate::py_to_r(adata$obs)
-  if(nrow(meta_data) == ncol(counts)) {
-    rownames(meta_data) <- colnames(counts)
+  # ============================================================================
+  # 5. metadata
+  # ============================================================================
+  .msg("Processing metadata...")
+  meta_data <- .safe_py_to_r(adata$obs, default = NULL)
+
+  if (is.null(meta_data)) {
+    meta_data <- data.frame(row.names = colnames(counts))
+  } else {
+    meta_data <- as.data.frame(meta_data)
+    if (nrow(meta_data) == ncol(counts)) {
+      rownames(meta_data) <- colnames(counts)
+    } else {
+      .warn("obs metadata row count does not match number of cells. Creating empty metadata instead.")
+      meta_data <- data.frame(row.names = colnames(counts))
+    }
   }
 
+  # ============================================================================
   # 6. 创建 Seurat 对象
-  if (verbose) message("Creating Seurat object...")
-  seurat_obj <- Seurat::CreateSeuratObject(counts = counts, meta.data = meta_data, assay = assay)
+  # ============================================================================
+  .msg("Creating Seurat object...")
+  if (is.null(project)) {
+    project <- tools::file_path_sans_ext(basename(file))
+  }
 
-  # 清理内存
-  rm(counts, matrix_data)
+  seurat_obj <- Seurat::CreateSeuratObject(
+    counts = counts,
+    meta.data = meta_data,
+    assay = assay,
+    project = project
+  )
+
+  # 记录数据来源
+  seurat_obj@misc$h5ad_info <- list(
+    file = normalizePath(file, winslash = "/", mustWork = FALSE),
+    data_source = data_source_used
+  )
+
+  rm(matrix_data, counts)
   gc()
 
-  # 7. 处理降维信息 (Embeddings)
-  if (!reticulate::py_is_null_xptr(adata$obsm)) {
+  # ============================================================================
+  # 7. 导入 obsm
+  # ============================================================================
+  if (isTRUE(import_obsm) && !reticulate::py_is_null_xptr(adata$obsm)) {
 
-    obsm_keys_py <- builtins$list(adata$obsm$keys())
-    obsm_keys <- tryCatch(reticulate::py_to_r(obsm_keys_py), error = function(e) NULL)
-    # 同样确保它是向量
-    obsm_keys <- unlist(obsm_keys)
+    .msg("Importing obsm entries...")
+    obsm_keys <- .safe_get_keys(adata$obsm)
 
     if (length(obsm_keys) > 0) {
       for (key in obsm_keys) {
-        if (key == "spatial") next
 
-        emb_matrix <- reticulate::py_to_r(adata$obsm$get(key))
+        clean_key <- .clean_reduction_name(key)
+        .msg("Processing obsm: ", key)
 
-        if (nrow(emb_matrix) != ncol(seurat_obj)) {
-          if (verbose) warning(paste("Skipping", key, ": Dimensions do not match cell count."))
+        emb <- tryCatch({
+          reticulate::py_to_r(adata$obsm$get(key))
+        }, error = function(e) {
+          .warn("Failed to read obsm '", key, "': ", conditionMessage(e))
+          NULL
+        })
+
+        if (is.null(emb)) next
+
+        emb_mat <- .to_numeric_matrix(emb)
+        if (is.null(emb_mat)) {
+          .warn("Skipping obsm '", key, "': cannot convert to a clean numeric matrix.")
           next
         }
 
-        rownames(emb_matrix) <- colnames(seurat_obj)
-        clean_key <- gsub("^X_", "", key)
-        colnames(emb_matrix) <- paste0(clean_key, "_", 1:ncol(emb_matrix))
-        seurat_key <- paste0(toupper(clean_key), "_")
+        # 预期 obsm 是 cells x dims
+        if (nrow(emb_mat) != ncol(seurat_obj)) {
+          .warn("Skipping obsm '", key, "': row count (", nrow(emb_mat),
+                ") does not match number of cells (", ncol(seurat_obj), ").")
+          next
+        }
 
-        if (verbose) message("Adding reduction: ", clean_key)
+        # 先判断是否该跳过 reduction 导入
+        if (.should_skip_obsm(clean_key, skip_obsm_patterns)) {
+          if (isTRUE(store_non_reduction_obsm_as_meta)) {
+            meta_df <- as.data.frame(emb_mat)
+            rownames(meta_df) <- colnames(seurat_obj)
 
-        seurat_obj[[clean_key]] <- Seurat::CreateDimReducObject(
-          embeddings = emb_matrix,
+            safe_prefix <- gsub("[^A-Za-z0-9_]", "_", clean_key)
+            colnames(meta_df) <- paste0(safe_prefix, "_", seq_len(ncol(meta_df)))
+
+            seurat_obj@meta.data <- cbind(
+              seurat_obj@meta.data,
+              meta_df[rownames(seurat_obj@meta.data), , drop = FALSE]
+            )
+            .msg("Stored obsm '", key, "' into meta.data instead of reductions.")
+          } else {
+            .msg("Skipped obsm '", key, "'.")
+          }
+          next
+        }
+
+        # 如果不像标准 reduction，也可按选项存 meta.data
+        if (!.is_reduction_like(clean_key, reduction_patterns)) {
+          if (isTRUE(store_non_reduction_obsm_as_meta)) {
+            meta_df <- as.data.frame(emb_mat)
+            rownames(meta_df) <- colnames(seurat_obj)
+
+            safe_prefix <- gsub("[^A-Za-z0-9_]", "_", clean_key)
+            colnames(meta_df) <- paste0(safe_prefix, "_", seq_len(ncol(meta_df)))
+
+            seurat_obj@meta.data <- cbind(
+              seurat_obj@meta.data,
+              meta_df[rownames(seurat_obj@meta.data), , drop = FALSE]
+            )
+            .msg("Stored non-reduction obsm '", key, "' into meta.data.")
+          } else {
+            .msg("Skipped non-reduction obsm '", key, "'.")
+          }
+          next
+        }
+
+        # reduction 命名去重
+        existing_reds <- names(seurat_obj@reductions)
+        red_name <- .make_unique_case_insensitive(clean_key, existing_reds)
+
+        seurat_key <- .make_seurat_key(red_name)
+
+        rownames(emb_mat) <- colnames(seurat_obj)
+        colnames(emb_mat) <- paste0(seurat_key, seq_len(ncol(emb_mat)))
+
+        seurat_obj[[red_name]] <- Seurat::CreateDimReducObject(
+          embeddings = emb_mat,
           key = seurat_key,
           assay = assay,
           global = TRUE
         )
+
+        .msg("Added reduction: ", red_name)
       }
     }
   }
 
-  if (verbose) message("Done.")
+  # ============================================================================
+  # 8. 可选导入 uns
+  # ============================================================================
+  if (isTRUE(import_uns) && !reticulate::py_is_null_xptr(adata$uns)) {
+    .msg("Importing uns into seurat_obj@misc$uns ...")
+    uns_keys <- .safe_get_keys(adata$uns)
+
+    uns_list <- list()
+    if (length(uns_keys) > 0) {
+      for (uk in uns_keys) {
+        uns_list[[uk]] <- tryCatch(
+          reticulate::py_to_r(adata$uns$get(uk)),
+          error = function(e) NULL
+        )
+      }
+    }
+
+    seurat_obj@misc$uns <- uns_list
+  }
+
+  .msg("Done.")
   return(seurat_obj)
 }
-
 
 # =============== writeH5AD ================
 # =============== 2.writeH5AD  ================

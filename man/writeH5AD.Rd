@@ -36,16 +36,16 @@ Fully compatible with both Seurat V4 and V5 structures.
 \examples{
 \dontrun{
   library(Seurat)
-  # 使用 Seurat 自带的小型示例数据集
+  # Use a small Seurat example dataset.
   data("pbmc_small")
 
-  # 定义输出路径 (这里使用临时文件演示)
+  # Define an output path for demonstration.
   out_file <- tempfile(fileext = ".h5ad")
 
-  # 1. 基础导出 (默认导出 DefaultAssay)
+  # 1. Basic export using the default assay.
   writeH5AD(pbmc_small, file = out_file)
 
-  # 2. 自定义参数导出 (指定 Assay 和 Layer 名称)
+  # 2. Custom export with explicit assay and layer names.
   # writeH5AD(object = pbmc_small,
   #           file = "output_sct.h5ad",
   #           assay = "SCT",

@@ -5,23 +5,29 @@
 \title{Run DoubletFinder Analysis (Pure Multi-threaded)}
 \usage{
 runDoubletFinderAnalysis(
-  sce,
+  object = NULL,
   split_by = "orig.ident",
+  split.by = NULL,
   pcs = 1:15,
   ncores = 4,
-  sct = FALSE
+  sct = FALSE,
+  sce = object
 )
 }
 \arguments{
-\item{sce}{Seurat object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
 \item{split_by}{Metadata column to split samples (e.g. "orig.ident").}
+
+\item{split.by}{Seurat-style alias for \code{split_by}.}
 
 \item{pcs}{PCs to use (default 1:15).}
 
 \item{ncores}{Number of cores for paramSweep.}
 
 \item{sct}{Logical, whether to use SCTransform.}
+
+\item{sce}{Backward-compatible alias for \code{object}.}
 }
 \description{
 A streamlined, multi-threaded implementation for Seurat V4/V5.

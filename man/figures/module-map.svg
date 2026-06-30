@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="560" viewBox="0 0 1080 560" role="img" aria-labelledby="title desc">
+  <title id="title">easySingleCell module map</title>
+  <desc id="desc">A module map showing the main analysis areas covered by easySingleCell.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f9fb; }
+      .title { font: 700 34px Arial, sans-serif; fill: #17202a; }
+      .subtitle { font: 400 17px Arial, sans-serif; fill: #5d6d7e; }
+      .card { fill: #ffffff; stroke: #d8e0e8; stroke-width: 2; rx: 8; }
+      .card-title { font: 700 19px Arial, sans-serif; fill: #17202a; }
+      .body { font: 400 14px Arial, sans-serif; fill: #34495e; }
+      .tag { font: 700 12px Arial, sans-serif; fill: #ffffff; }
+      .core { fill: #1f77b4; }
+      .optional { fill: #4c9a6a; }
+      .io { fill: #8e5ea2; }
+      .warn { fill: #b7791f; }
+      .line { stroke: #9aa9b7; stroke-width: 2; fill: none; }
+    </style>
+  </defs>
+  <rect class="bg" width="1080" height="560"/>
+  <text x="54" y="62" class="title">easySingleCell</text>
+  <text x="54" y="92" class="subtitle">A Seurat-centered helper package for common single-cell and bulk transcriptomics workflows</text>
+
+  <rect x="54" y="132" width="300" height="145" class="card"/>
+  <rect x="78" y="154" width="76" height="24" rx="5" class="core"/>
+  <text x="93" y="171" class="tag">CORE</text>
+  <text x="78" y="208" class="card-title">scRNA preprocessing</text>
+  <text x="78" y="234" class="body">QC, filtering, normalization,</text>
+  <text x="78" y="254" class="body">Harmony, UMAP, doublet and</text>
+  <text x="78" y="274" class="body">ambient RNA wrappers.</text>
+
+  <rect x="390" y="132" width="300" height="145" class="card"/>
+  <rect x="414" y="154" width="76" height="24" rx="5" class="core"/>
+  <text x="429" y="171" class="tag">CORE</text>
+  <text x="414" y="208" class="card-title">Visualization</text>
+  <text x="414" y="234" class="body">DimPlot, FeaturePlot, DotPlot,</text>
+  <text x="414" y="254" class="body">cell-ratio, ROE, box and grouped</text>
+  <text x="414" y="274" class="body">plot helpers.</text>
+
+  <rect x="726" y="132" width="300" height="145" class="card"/>
+  <rect x="750" y="154" width="76" height="24" rx="5" class="io"/>
+  <text x="771" y="171" class="tag">I/O</text>
+  <text x="750" y="208" class="card-title">ID conversion and exchange</text>
+  <text x="750" y="234" class="body">AnnotationDbi keytypes, Seurat</text>
+  <text x="750" y="254" class="body">feature ID conversion, h5ad</text>
+  <text x="750" y="274" class="body">read/write helpers.</text>
+
+  <rect x="54" y="326" width="300" height="145" class="card"/>
+  <rect x="78" y="348" width="92" height="24" rx="5" class="optional"/>
+  <text x="93" y="365" class="tag">OPTION</text>
+  <text x="78" y="402" class="card-title">Trajectory and CNA</text>
+  <text x="78" y="428" class="body">Monocle2, CytoTRACE and CopyKAT</text>
+  <text x="78" y="448" class="body">workflows, enabled when optional</text>
+  <text x="78" y="468" class="body">packages are installed.</text>
+
+  <rect x="390" y="326" width="300" height="145" class="card"/>
+  <rect x="414" y="348" width="92" height="24" rx="5" class="optional"/>
+  <text x="429" y="365" class="tag">OPTION</text>
+  <text x="414" y="402" class="card-title">Enrichment, bulk and AI</text>
+  <text x="414" y="428" class="body">single-cell GSEA, limma, bulk GSEA,</text>
+  <text x="414" y="448" class="body">DepMap, GEO screening and optional</text>
+  <text x="414" y="468" class="body">OpenAI classification utilities.</text>
+
+  <rect x="726" y="326" width="300" height="145" class="card"/>
+  <rect x="750" y="348" width="92" height="24" rx="5" class="warn"/>
+  <text x="765" y="365" class="tag">BUILD</text>
+  <text x="750" y="402" class="card-title">Package hygiene</text>
+  <text x="750" y="428" class="body">Maintenance scripts and local docs</text>
+  <text x="750" y="448" class="body">stay in the repository but are</text>
+  <text x="750" y="468" class="body">excluded from R package builds.</text>
+
+  <path d="M354 205 H390" class="line"/>
+  <path d="M690 205 H726" class="line"/>
+  <path d="M204 277 V326" class="line"/>
+  <path d="M540 277 V326" class="line"/>
+  <path d="M876 277 V326" class="line"/>
+</svg>

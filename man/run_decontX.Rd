@@ -4,14 +4,16 @@
 \alias{run_decontX}
 \title{Run decontX to estimate ambient RNA contamination}
 \usage{
-run_decontX(sce, assay = "RNA", seed = 123)
+run_decontX(object = NULL, assay = "RNA", seed = 123, sce = object)
 }
 \arguments{
-\item{sce}{A Seurat object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
 \item{assay}{The assay to use for decontamination. Default is "RNA".}
 
 \item{seed}{Random seed for reproducibility. Default is 123.}
+
+\item{sce}{Backward-compatible alias for \code{object}.}
 }
 \value{
 A Seurat object with 'contamination' added to meta.data.

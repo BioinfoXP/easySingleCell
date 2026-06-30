@@ -41,31 +41,30 @@ based on sample IDs before analysis to prevent dimension mismatch errors.
 }
 \examples{
 \dontrun{
-  # 1. 创建模拟表达矩阵 (100基因 x 6样本)
+  # 1. Create a mock expression matrix (100 genes x 6 samples).
   set.seed(123)
   exp_data <- matrix(rnorm(600), nrow = 100, ncol = 6)
   colnames(exp_data) <- c("S1", "S2", "S3", "S4", "S5", "S6")
   rownames(exp_data) <- paste0("Gene", 1:100)
 
-  # 模拟差异：让前5个基因在 S4-S6 中高表达
+  # Simulate differential expression for the first five genes in S4-S6.
   exp_data[1:5, 4:6] <- exp_data[1:5, 4:6] + 3
 
-  # 2. 创建元数据 (特意多加一个无关样本 S7，测试自动对齐功能)
+  # 2. Create metadata with one extra unused sample to test alignment.
   meta_data <- data.frame(
     row.names = c("S1", "S2", "S3", "S4", "S5", "S6", "S7_Unused"),
     condition = c("Ctrl", "Ctrl", "Ctrl", "Treat", "Treat", "Treat", "Treat"),
     batch = c(1, 1, 1, 2, 2, 2, 3)
   )
 
-  # 3. 运行分析
-  # 函数会自动发现 exp_data 只有 S1-S6，从而自动丢弃 meta_data 中的 S7
+  # 3. Run the analysis. The function keeps only matched samples.
   deg_res <- BulkLimma(exp_mat = exp_data,
                        metadata = meta_data,
                        group_col = "condition",
                        case_group = "Treat",
                        control_group = "Ctrl")
 
-  # 4. 查看结果
+  # 4. Inspect results.
   head(deg_res)
   table(deg_res$change)
 }

@@ -23,11 +23,17 @@
 #'     \item \code{Character Vector}: Recommended for Sub-clustering**. A user-defined list of allowed subtypes.
 #'   }
 #' @param prior_info Character (Optional). External biological context. E.g., "T cell sub-clustering".
-#' @param model Character. LLM model name. Default \code{"gpt-4o-mini"}. \code{"gpt-4o"} is recommended for sub-clustering.
+#' @param model Character or NULL. LLM model name. If \code{NULL}, uses the
+#'   internal annotation model from \code{R/AI_config.R}. \code{"gpt-4o"} is recommended for subtle
+#'   sub-clustering.
 #' @param topgenenumber Integer. The number of top markers (sorted by LogFC) to send per cluster. Default: 20.
 #' @param p_val_thresh Numeric. Significance threshold. Default: 0.05.
-#' @param base_url Character. API endpoint. Default: "https://api.gpt.ge/v1".
-#' @param api_key Character. OpenAI-compatible API Key. Defaults to \code{Sys.getenv("OPENAI_API_KEY")}.
+#' @param base_url Character or NULL. OpenAI-compatible API endpoint. If
+#'   \code{NULL}, uses the internal base URL from \code{R/AI_config.R}.
+#' @param endpoint Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+#'   \code{"responses"}. \code{NULL} uses the package default \code{"auto"}.
+#' @param api_key Character. OpenAI-compatible API key. Defaults to the
+#'   configured \code{OPENAI_API_KEY} environment variable.
 #' @param retries Integer. Max retry attempts per cluster. Default: 3.
 #' @param verbose Logical. Print progress bar. Default: \code{TRUE}.
 #'
@@ -98,15 +104,15 @@ AutoCellType <- function(
     cell_ontology = NULL,
     prior_info = NULL,
     n_cores = 1,
-    model = "gpt-4o-mini",
+    model = NULL,
     topgenenumber = 20,
     p_val_thresh = 0.05,
-    base_url = "https://api.gpt.ge/v1",
+    base_url = NULL,
+    endpoint = NULL,
     api_key = NULL,
     retries = 3,
     verbose = TRUE
 ) {
-
   # --- 1. Configuration ---
   STANDARD_COLS <- c("cluster_id", "primary_lineage", "detailed_subtype", "functional_state", "confidence", "reasoning")
 
@@ -126,7 +132,7 @@ AutoCellType <- function(
 
   # --- 2. Dependencies ---
   check_deps <- function() {
-    pkgs <- c("openai", "dplyr", "glue", "tibble", "jsonlite", "stringr", "future", "future.apply", "progressr")
+    pkgs <- c("dplyr", "glue", "tibble", "jsonlite", "stringr", "future", "future.apply", "progressr")
     missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
     if (length(missing) > 0) stop("Missing packages: ", paste(missing, collapse = ", "))
   }
@@ -136,24 +142,24 @@ AutoCellType <- function(
     if (inherits(dat, "data.frame")) {
       cols <- colnames(dat)
       if (!"gene" %in% cols) {
-        if ("feature" %in% cols) dat <- dplyr::rename(dat, gene = feature)
+        if ("feature" %in% cols) names(dat)[names(dat) == "feature"] <- "gene"
         else dat$gene <- rownames(dat)
       }
-      if (!"avg_log2FC" %in% cols && "avg_logFC" %in% cols) dat <- dplyr::rename(dat, avg_log2FC = avg_logFC)
+      if (!"avg_log2FC" %in% cols && "avg_logFC" %in% cols) names(dat)[names(dat) == "avg_logFC"] <- "avg_log2FC"
 
       dat$avg_log2FC <- as.numeric(dat$avg_log2FC)
       if("p_val_adj" %in% cols) dat$p_val_adj <- as.numeric(dat$p_val_adj)
 
       dat |>
-        dplyr::filter(if("p_val_adj" %in% colnames(dat)) p_val_adj < p_thresh else TRUE) |>
-        dplyr::filter(avg_log2FC > 0) |>
-        dplyr::group_by(cluster) |>
-        dplyr::slice_max(order_by = avg_log2FC, n = n) |>
-        dplyr::summarise(genes = paste0(gene, collapse = ", "), .groups = "drop") |>
-        dplyr::mutate(cluster = as.character(cluster)) |>
+        dplyr::filter(if("p_val_adj" %in% colnames(dat)) .data$p_val_adj < p_thresh else TRUE) |>
+        dplyr::filter(.data$avg_log2FC > 0) |>
+        dplyr::group_by(.data$cluster) |>
+        dplyr::slice_max(order_by = .data$avg_log2FC, n = n) |>
+        dplyr::summarise(genes = paste0(.data$gene, collapse = ", "), .groups = "drop") |>
+        dplyr::mutate(cluster = as.character(.data$cluster)) |>
         tibble::deframe()
     } else if (inherits(dat, "list")) {
-      sapply(dat, function(x) paste0(head(x, n), collapse = ", "))
+      sapply(dat, function(x) paste0(utils::head(x, n), collapse = ", "))
     } else stop("Input format error: Must be data.frame or list")
   }
 
@@ -215,7 +221,7 @@ AutoCellType <- function(
   }
 
   # --- 6. Single Cluster Runner (Fault Tolerant) ---
-  run_single_cluster <- function(cid, cgenes, client, sys_prompt, retry_limit) {
+  run_single_cluster <- function(cid, cgenes, provider, key, sys_prompt, retry_limit) {
     user_msg <- glue::glue("Cluster ID: {cid}\nMarkers: {cgenes}")
     last_error <- "Unknown"
 
@@ -224,10 +230,16 @@ AutoCellType <- function(
 
       # API Call
       api_res <- tryCatch({
-        client$chat$completions$create(
-          model = model,
-          messages = list(list(role = "system", content = sys_prompt), list(role = "user", content = user_msg)),
-          temperature = 0.1, max_tokens = 2000, response_format = list(type = "json_object")
+        .easyAI_call_provider_messages(
+          messages = list(
+            list(role = "system", content = sys_prompt),
+            list(role = "user", content = user_msg)
+          ),
+          provider = provider,
+          api_key = key,
+          temperature = 0.1,
+          response_format = list(type = "json_object"),
+          max_tokens = 2000
         )
       }, error = function(e) {
         # [FATAL ERROR CHECK]
@@ -243,13 +255,13 @@ AutoCellType <- function(
         stop(api_res$message) # Re-throw to be caught by wrapper
       }
 
-      if (!is.null(api_res$error)) {
+      if (is.list(api_res) && !is.null(api_res$error)) {
         last_error <- paste("API Error:", api_res$error)
         next
       }
 
       # Parse & Repair
-      raw <- api_res$choices[[1]]$message$content
+      raw <- api_res
       # Extract JSON-like part
       json_match <- stringr::str_extract(raw, "(?s)\\{.*")
       target <- if (!is.na(json_match)) json_match else raw
@@ -302,8 +314,15 @@ AutoCellType <- function(
   # --- 7. Main Loop ---
   tryCatch({
     check_deps()
-    key <- if (is.null(api_key)) Sys.getenv("OPENAI_API_KEY") else api_key
-    client <- openai::OpenAI(api_key = key, base_url = base_url)
+    provider <- .easyAI_build_provider(
+      api_key = api_key,
+      model = model,
+      base_url = base_url,
+      endpoint = endpoint,
+      task = "annotation"
+    )
+    key <- provider$api_key
+    model <- provider$model
 
     markers_vec <- format_markers(input, topgenenumber, p_val_thresh)
     if (length(markers_vec) == 0) stop("No valid markers.")
@@ -313,7 +332,7 @@ AutoCellType <- function(
 
     if (verbose) message(glue::glue("=== AutoCellType ({model}) | {length(cluster_ids)} Clusters | Cores: {n_cores} ==="))
 
-    worker <- function(cid) run_single_cluster(cid, markers_vec[cid], client, sys_prompt, retries)
+    worker <- function(cid) run_single_cluster(cid, markers_vec[cid], provider, key, sys_prompt, retries)
 
     if (n_cores > 1) {
       future::plan(future::multisession, workers = n_cores)
@@ -337,5 +356,3 @@ AutoCellType <- function(
 
   }, error = function(e) stop("AutoCellType Critical Error: ", e$message))
 }
-
-

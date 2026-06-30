@@ -10,10 +10,11 @@ AutoCellType(
   cell_ontology = NULL,
   prior_info = NULL,
   n_cores = 1,
-  model = "gpt-4o-mini",
+  model = NULL,
   topgenenumber = 20,
   p_val_thresh = 0.05,
-  base_url = "https://api.gpt.ge/v1",
+  base_url = NULL,
+  endpoint = NULL,
   api_key = NULL,
   retries = 3,
   verbose = TRUE
@@ -42,15 +43,22 @@ AutoCellType(
 \item \code{>1}: Parallel processing (Recommended: 4-8). Requires high API rate limits.
 }}
 
-\item{model}{Character. LLM model name. Default \code{"gpt-4o-mini"}. \code{"gpt-4o"} is recommended for sub-clustering.}
+\item{model}{Character or NULL. LLM model name. If \code{NULL}, uses the
+internal annotation model from \code{R/AI_config.R}. \code{"gpt-4o"} is recommended for subtle
+sub-clustering.}
 
 \item{topgenenumber}{Integer. The number of top markers (sorted by LogFC) to send per cluster. Default: 20.}
 
 \item{p_val_thresh}{Numeric. Significance threshold. Default: 0.05.}
 
-\item{base_url}{Character. API endpoint. Default: "https://api.gpt.ge/v1".}
+\item{base_url}{Character or NULL. OpenAI-compatible API endpoint. If
+\code{NULL}, uses the internal base URL from \code{R/AI_config.R}.}
 
-\item{api_key}{Character. OpenAI-compatible API Key. Defaults to \code{Sys.getenv("OPENAI_API_KEY")}.}
+\item{endpoint}{Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+\code{"responses"}. \code{NULL} uses the package default \code{"auto"}.}
+
+\item{api_key}{Character. OpenAI-compatible API key. Defaults to the
+configured \code{OPENAI_API_KEY} environment variable.}
 
 \item{retries}{Integer. Max retry attempts per cluster. Default: 3.}
 

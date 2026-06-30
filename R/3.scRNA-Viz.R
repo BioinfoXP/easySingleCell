@@ -27,7 +27,7 @@ scVisFeaturePlot <- function(scRNA,
                              features,
                              reduction = "umap",
                              pt.size = 0.1,
-                             max.cutoff = "q95", # 推荐用分位数，比固定数值1.5更健壮
+                             max.cutoff = "q95", # \u63A8\u8350\u7528\u5206\u4F4D\u6570\uFF0C\u6BD4\u56FA\u5B9A\u6570\u503C1.5\u66F4\u5065\u58EE
                              cols = c("#FFEFD5","#E6E6FA","#87CEFA","#6495ED","#4169E1","#0000CD","#000080"),
                              ncol = NULL,
                              nrow = NULL,
@@ -35,16 +35,16 @@ scVisFeaturePlot <- function(scRNA,
                              plot.title = NULL,
                              ...) {
 
-  # 内部辅助函数：处理单个 Feature
+  # \u5185\u90E8\u8F85\u52A9\u51FD\u6570\uFF1A\u5904\u7406\u5355\u4E2A Feature
   create_single_plot <- function(feature) {
 
-    # 检查 Feature 是否存在 (避免报错中断)
+    # \u68C0\u67E5 Feature \u662F\u5426\u5B58\u5728 (\u907F\u514D\u62A5\u9519\u4E2D\u65AD)
     if (!feature %in% rownames(scRNA) && !feature %in% colnames(scRNA@meta.data)) {
       warning(paste("Feature", feature, "not found in object."))
       return(NULL)
     }
 
-    # 基础绘图 (注意：这里把 cols留空，我们用 ggplot 图层手动加颜色)
+    # \u57FA\u7840\u7ED8\u56FE (\u6CE8\u610F\uFF1A\u8FD9\u91CC\u628A cols\u7559\u7A7A\uFF0C\u6211\u4EEC\u7528 ggplot \u56FE\u5C42\u624B\u52A8\u52A0\u989C\u8272)
     p <- Seurat::FeaturePlot(
       object = scRNA,
       features = feature,
@@ -54,9 +54,9 @@ scVisFeaturePlot <- function(scRNA,
       ...
     )
 
-    # 应用自定义颜色渐变和主题
+    # \u5E94\u7528\u81EA\u5B9A\u4E49\u989C\u8272\u6E10\u53D8\u548C\u4E3B\u9898
     p <- p +
-      ggplot2::scale_color_gradientn(colors = cols) + # 关键：正确应用多色渐变
+      ggplot2::scale_color_gradientn(colors = cols) + # \u5173\u952E\uFF1A\u6B63\u786E\u5E94\u7528\u591A\u8272\u6E10\u53D8
       ggplot2::scale_x_continuous("") +
       ggplot2::scale_y_continuous("") +
       ggplot2::theme_bw() +
@@ -66,27 +66,27 @@ scVisFeaturePlot <- function(scRNA,
         axis.ticks = ggplot2::element_blank(),
         axis.text = ggplot2::element_blank(),
         plot.title = ggplot2::element_text(hjust = 0.5, size = 12, face = "bold"),
-        legend.position = if(show.legend) "right" else "none" # 灵活控制图例
+        legend.position = if(show.legend) "right" else "none" # \u7075\u6D3B\u63A7\u5236\u56FE\u4F8B
       ) +
-      ggplot2::ggtitle(feature) # 子图标题始终为基因名
+      ggplot2::ggtitle(feature) # \u5B50\u56FE\u6807\u9898\u59CB\u7EC8\u4E3A\u57FA\u56E0\u540D
 
     return(p)
   }
 
-  # 循环生成图形列表
+  # \u5FAA\u73AF\u751F\u6210\u56FE\u5F62\u5217\u8868
   plot_list <- lapply(features, create_single_plot)
 
-  # 移除 NULL (即没找到的基因)
+  # \u79FB\u9664 NULL (\u5373\u6CA1\u627E\u5230\u7684\u57FA\u56E0)
   plot_list <- plot_list[!sapply(plot_list, is.null)]
 
   if (length(plot_list) == 0) {
     stop("No valid features found to plot.")
   }
 
-  # 使用 patchwork 拼图
+  # \u4F7F\u7528 patchwork \u62FC\u56FE
   combined_plot <- patchwork::wrap_plots(plot_list, ncol = ncol, nrow = nrow)
 
-  # 如果有总标题，添加总标题
+  # \u5982\u679C\u6709\u603B\u6807\u9898\uFF0C\u6DFB\u52A0\u603B\u6807\u9898
   if (!is.null(plot.title)) {
     combined_plot <- combined_plot + patchwork::plot_annotation(title = plot.title)
   }
@@ -116,6 +116,7 @@ scVisFeaturePlot <- function(scRNA,
 #' @param label.box Logical, whether to draw a box around the label. Default FALSE.
 #' @param strip.color Background color for facet strips.
 #' @param legend.position Position of legend.
+#' @param aspect.ratio Plot aspect ratio. Default `1`.
 #' @param ... Additional arguments.
 #'
 #' @return A ggplot object.
@@ -135,17 +136,17 @@ scVisDimPlot <- function(scRNA,
                          alpha = 1,
                          show.arrow = TRUE,
                          show.axis.title = FALSE,
-                         label = FALSE,        # 新增：是否标记
-                         label.size = 4,       # 新增：字体大小
-                         label.color = "black",# 新增：字体颜色
-                         repel = FALSE,        # 新增：是否防重叠
-                         label.box = FALSE,    # 新增：是否加背景框
+                         label = FALSE,        # \u65B0\u589E\uFF1A\u662F\u5426\u6807\u8BB0
+                         label.size = 4,       # \u65B0\u589E\uFF1A\u5B57\u4F53\u5927\u5C0F
+                         label.color = "black",# \u65B0\u589E\uFF1A\u5B57\u4F53\u989C\u8272
+                         repel = FALSE,        # \u65B0\u589E\uFF1A\u662F\u5426\u9632\u91CD\u53E0
+                         label.box = FALSE,    # \u65B0\u589E\uFF1A\u662F\u5426\u52A0\u80CC\u666F\u6846
                          strip.color = "#e6bac5",
                          legend.position = "right",
                          aspect.ratio = 1,
                          ...) {
 
-  # 1. 检查 Reduction 并获取坐标轴名称
+  # 1. \u68C0\u67E5 Reduction \u5E76\u83B7\u53D6\u5750\u6807\u8F74\u540D\u79F0
   if (!reduction %in% names(scRNA)) {
     stop(paste("Reduction", reduction, "not found in object."))
   }
@@ -154,7 +155,7 @@ scVisDimPlot <- function(scRNA,
   dims <- colnames(emb)[1:2]
   key <- emb@key
 
-  # 2. 准备绘图数据
+  # 2. \u51C6\u5907\u7ED8\u56FE\u6570\u636E
   if (is.null(group.by)) {
     group.by <- "ident"
     plot_data <- Seurat::FetchData(scRNA, vars = c(dims, split.by))
@@ -166,7 +167,7 @@ scVisDimPlot <- function(scRNA,
   group_col <- if (is.null(group.by)) "ident" else group.by
   plot_data[[group_col]] <- as.factor(plot_data[[group_col]])
 
-  # 3. 设置默认颜色
+  # 3. \u8BBE\u7F6E\u9ED8\u8BA4\u989C\u8272
   if (is.null(colors)) {
     colors <- c("#919ac2","#ffac98","#70a4c8","#a5a9af","#63917d",
                 "#dbd1b4","#6e729a","#9ba4bd","#c5ae5f","#b9b8d6",
@@ -179,50 +180,50 @@ scVisDimPlot <- function(scRNA,
     }
   }
 
-  # 4. 构建 ggplot 基础图层
+  # 4. \u6784\u5EFA ggplot \u57FA\u7840\u56FE\u5C42
   p <- ggplot2::ggplot(plot_data, ggplot2::aes_string(x = dims[1], y = dims[2], color = group_col)) +
     ggplot2::geom_point(size = pt.size, shape = 16, stroke = stroke, alpha = alpha) +
     ggplot2::scale_color_manual(values = colors) +
     ggplot2::theme_classic() +
     ggplot2::labs(x = dims[1], y = dims[2])
 
-  # ================== 新增 Label 处理逻辑 ==================
+  # ================== \u65B0\u589E Label \u5904\u7406\u903B\u8F91 ==================
   if (label) {
-    # 计算每个群体的中心点 (Median)
-    # 如果有 split.by，需要按 group + split 分组计算
+    # \u8BA1\u7B97\u6BCF\u4E2A\u7FA4\u4F53\u7684\u4E2D\u5FC3\u70B9 (Median)
+    # \u5982\u679C\u6709 split.by\uFF0C\u9700\u8981\u6309 group + split \u5206\u7EC4\u8BA1\u7B97
     if (!is.null(split.by)) {
       group_vars <- c(group_col, split.by)
     } else {
       group_vars <- c(group_col)
     }
 
-    # 使用 base R aggregate 计算中位数，避免增加 dplyr 依赖
+    # \u4F7F\u7528 base R aggregate \u8BA1\u7B97\u4E2D\u4F4D\u6570\uFF0C\u907F\u514D\u589E\u52A0 dplyr \u4F9D\u8D56
     label_data <- stats::aggregate(
       list(x = plot_data[[dims[1]]], y = plot_data[[dims[2]]]),
       by = plot_data[group_vars],
       FUN = stats::median
     )
 
-    # 定义绘图参数
+    # \u5B9A\u4E49\u7ED8\u56FE\u53C2\u6570
     geom_fun <- if (label.box) {
       if (repel) ggrepel::geom_label_repel else ggplot2::geom_label
     } else {
       if (repel) ggrepel::geom_text_repel else ggplot2::geom_text
     }
 
-    # 添加标签图层
+    # \u6DFB\u52A0\u6807\u7B7E\u56FE\u5C42
     p <- p + geom_fun(
       data = label_data,
       ggplot2::aes_string(x = "x", y = "y", label = group_col),
       color = label.color,
       size = label.size,
       show.legend = FALSE,
-      inherit.aes = FALSE # 关键：不继承主图的aes，防止报错
+      inherit.aes = FALSE # \u5173\u952E\uFF1A\u4E0D\u7EE7\u627F\u4E3B\u56FE\u7684aes\uFF0C\u9632\u6B62\u62A5\u9519
     )
   }
   # =======================================================
 
-  # 5. 应用“张泽民团队”风格主题
+  # 5. \u5E94\u7528\u201C\u5F20\u6CFD\u6C11\u56E2\u961F\u201D\u98CE\u683C\u4E3B\u9898
   axis_line_setting <- if (show.arrow) {
     ggplot2::element_line(colour = "black", size = 0.3,
                           arrow = ggplot2::arrow(length = ggplot2::unit(0.1, "cm"), type = "closed"))
@@ -251,12 +252,12 @@ scVisDimPlot <- function(scRNA,
     strip.placement = "outside"
   )
 
-  # 6. 处理分面
+  # 6. \u5904\u7406\u5206\u9762
   if (!is.null(split.by)) {
     p <- p + ggplot2::facet_wrap(as.formula(paste("~", split.by)))
   }
 
-  # 7. 优化图例点的显示
+  # 7. \u4F18\u5316\u56FE\u4F8B\u70B9\u7684\u663E\u793A
   p <- p + ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 3, alpha = 1)))
 
   return(p)
@@ -279,6 +280,7 @@ scVisDimPlot <- function(scRNA,
 #' @param font.size Numeric. Base font size.
 #' @param scale.min Numeric. Minimum limit for scaled expression (default -2.5).
 #' @param scale.max Numeric. Maximum limit for scaled expression (default 2.5).
+#' @param ... Additional arguments reserved for future extensions.
 #'
 #' @return A ggplot object.
 #' @export
@@ -306,51 +308,51 @@ scVisDotPlot <- function(object,
                          scale.max = NA,
                          ...) {
 
-  # --- 1. 判断模式 (向量 vs 列表) ---
+  # --- 1. \u5224\u65AD\u6A21\u5F0F (\u5411\u91CF vs \u5217\u8868) ---
   is_grouped <- is.list(features)
 
   if (is_grouped && is.null(names(features))) {
-    stop("❌ If 'features' is a list, it must be named (e.g., list('GroupA' = c(...))).")
+    stop("\u274C If 'features' is a list, it must be named (e.g., list('GroupA' = c(...))).")
   }
 
-  # --- 2. 准备基因列表 ---
+  # --- 2. \u51C6\u5907\u57FA\u56E0\u5217\u8868 ---
   if (is_grouped) {
     all_genes_input <- unique(unlist(features))
   } else {
     all_genes_input <- unique(features)
   }
 
-  # 检查基因是否存在
+  # \u68C0\u67E5\u57FA\u56E0\u662F\u5426\u5B58\u5728
   avail_genes <- rownames(object)
   valid_genes <- all_genes_input[all_genes_input %in% avail_genes]
   missing_genes <- setdiff(all_genes_input, avail_genes)
 
   if (length(missing_genes) > 0) {
-    warning(paste("⚠️ Skipped missing genes:", paste(missing_genes, collapse = ", ")), call. = FALSE)
+    warning(paste("\u26A0\uFE0F Skipped missing genes:", paste(missing_genes, collapse = ", ")), call. = FALSE)
   }
-  if (length(valid_genes) == 0) stop("❌ No valid genes found in the object.")
+  if (length(valid_genes) == 0) stop("\u274C No valid genes found in the object.")
 
-  # --- 3. 设置分组 ---
+  # --- 3. \u8BBE\u7F6E\u5206\u7EC4 ---
   if (is.null(group.by)) {
     object$scVis_ident <- Seurat::Idents(object)
     group.by <- "scVis_ident"
   } else if (!group.by %in% colnames(object@meta.data)) {
-    stop(paste0("❌ Group column '", group.by, "' not found."))
+    stop(paste0("\u274C Group column '", group.by, "' not found."))
   }
 
-  # --- 4. 计算基础统计量 (Mean & Pct) ---
-  # 这一步对两种模式是通用的
+  # --- 4. \u8BA1\u7B97\u57FA\u7840\u7EDF\u8BA1\u91CF (Mean & Pct) ---
+  # \u8FD9\u4E00\u6B65\u5BF9\u4E24\u79CD\u6A21\u5F0F\u662F\u901A\u7528\u7684
   dat <- Seurat::FetchData(object, vars = c(valid_genes, group.by))
 
   base_data <- dat |>
     tidyr::pivot_longer(cols = all_of(valid_genes), names_to = "Gene", values_to = "Expr") |>
     dplyr::group_by(CellType = .data[[group.by]], Gene) |>
     dplyr::summarise(
-      AvgExp = mean(expm1(.data$Expr)), # 非Log空间求均值
+      AvgExp = mean(expm1(.data$Expr)), # \u975ELog\u7A7A\u95F4\u6C42\u5747\u503C
       PctExp = sum(.data$Expr > 0) / dplyr::n() * 100,
       .groups = "drop"
     ) |>
-    dplyr::mutate(AvgExp = log1p(.data$AvgExp)) # Log回去
+    dplyr::mutate(AvgExp = log1p(.data$AvgExp)) # Log\u56DE\u53BB
 
   # Z-Score Scaling
   base_data <- base_data |>
@@ -358,14 +360,14 @@ scVisDotPlot <- function(object,
     dplyr::mutate(AvgExpScaled = as.numeric(scale(.data$AvgExp))) |>
     dplyr::ungroup()
 
-  # 截断值处理
+  # \u622A\u65AD\u503C\u5904\u7406
   if (!is.na(scale.min)) base_data$AvgExpScaled[base_data$AvgExpScaled < scale.min] <- scale.min
   if (!is.na(scale.max)) base_data$AvgExpScaled[base_data$AvgExpScaled > scale.max] <- scale.max
 
-  # --- 5. 构建绘图数据 (分支逻辑) ---
+  # --- 5. \u6784\u5EFA\u7ED8\u56FE\u6570\u636E (\u5206\u652F\u903B\u8F91) ---
 
   if (is_grouped) {
-    # === 模式 A: 列表 (带分面，支持重复) ===
+    # === \u6A21\u5F0F A: \u5217\u8868 (\u5E26\u5206\u9762\uFF0C\u652F\u6301\u91CD\u590D) ===
     final_df_list <- list()
     for (grp_name in names(features)) {
       grp_genes <- features[[grp_name]]
@@ -374,7 +376,7 @@ scVisDotPlot <- function(object,
 
       sub_df <- base_data[base_data$Gene %in% grp_genes, ]
       sub_df$FeatureGroup <- grp_name
-      # 强制因子水平以保持列表顺序
+      # \u5F3A\u5236\u56E0\u5B50\u6C34\u5E73\u4EE5\u4FDD\u6301\u5217\u8868\u987A\u5E8F
       sub_df$Gene <- factor(sub_df$Gene, levels = grp_genes)
       final_df_list[[grp_name]] <- sub_df
     }
@@ -382,13 +384,13 @@ scVisDotPlot <- function(object,
     final_plot_data$FeatureGroup <- factor(final_plot_data$FeatureGroup, levels = names(features))
 
   } else {
-    # === 模式 B: 向量 (无分面，标准展示) ===
+    # === \u6A21\u5F0F B: \u5411\u91CF (\u65E0\u5206\u9762\uFF0C\u6807\u51C6\u5C55\u793A) ===
     final_plot_data <- base_data
-    # 强制因子水平以保持输入向量顺序
+    # \u5F3A\u5236\u56E0\u5B50\u6C34\u5E73\u4EE5\u4FDD\u6301\u8F93\u5165\u5411\u91CF\u987A\u5E8F
     final_plot_data$Gene <- factor(final_plot_data$Gene, levels = valid_genes)
   }
 
-  # --- 6. 配色方案 ---
+  # --- 6. \u914D\u8272\u65B9\u6848 ---
   if (is.null(pal)) {
     if (requireNamespace("RColorBrewer", quietly = TRUE)) {
       pal <- rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu"))
@@ -397,11 +399,11 @@ scVisDotPlot <- function(object,
     }
   }
 
-  # --- 7. 绘图 (ggplot2) ---
+  # --- 7. \u7ED8\u56FE (ggplot2) ---
   p <- ggplot2::ggplot(final_plot_data, ggplot2::aes(x = .data$Gene, y = .data$CellType)) +
     ggplot2::geom_point(ggplot2::aes(size = .data$PctExp, color = .data$AvgExpScaled)) +
 
-    # 标尺
+    # \u6807\u5C3A
     ggplot2::scale_color_gradientn(
       colors = pal,
       guide = ggplot2::guide_colorbar(title = "Mean Exp\n(Scaled)", order = 1)
@@ -412,7 +414,7 @@ scVisDotPlot <- function(object,
       guide = ggplot2::guide_legend(title = "Fraction (%)", order = 2, override.aes = list(shape=21, fill="grey", color="black"))
     ) +
 
-    # 主题
+    # \u4E3B\u9898
     ggplot2::theme_bw() +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = rot_angle, hjust = 1, vjust = if(rot_angle==45) 1 else 0.5,
@@ -423,7 +425,7 @@ scVisDotPlot <- function(object,
       panel.spacing = ggplot2::unit(0.1, "lines")
     )
 
-  # --- 8. 仅在列表模式下添加分面 ---
+  # --- 8. \u4EC5\u5728\u5217\u8868\u6A21\u5F0F\u4E0B\u6DFB\u52A0\u5206\u9762 ---
   if (is_grouped) {
     p <- p +
       ggplot2::facet_grid(cols = ggplot2::vars(.data$FeatureGroup), scales = "free_x", space = "free_x") +
@@ -469,10 +471,10 @@ scVisDotPlot <- function(object,
 #'
 #' @examples
 #' \dontrun{
-#'   # 1. 美化版 + 图例在右侧
+#'   # 1. Polished style with legend on the right.
 #'   scVisRatioBox(sce, "Group", "celltype", "sample", legend_position = "right")
 #'
-#'   # 2. 指定参考组 + 隐藏 NS + 图例在顶部
+#'   # 2. Specify a reference group, hide NS labels, and put legend on top.
 #'   scVisRatioBox(sce, "Group", "celltype", "sample",
 #'                 ref_group = "Control", hide_ns = TRUE, legend_position = "top")
 #' }
@@ -485,26 +487,26 @@ scVisRatioBox <- function(sce,
                           sign_method = "wilcox.test",
                           sign_label = "p.signif",
                           hide_ns = FALSE,
-                          legend_position = "top", # <--- 新增参数
+                          legend_position = "top", # <--- \u65B0\u589E\u53C2\u6570
                           palette = NULL,
                           pt_size = 1.2,
                           box_width = 0.5,
                           base_size = 14) {
 
-  # --- 1. 输入检查 ---
+  # --- 1. \u8F93\u5165\u68C0\u67E5 ---
   if (!inherits(sce, "Seurat")) stop("Input 'sce' must be a Seurat object.")
   if (!requireNamespace("ggpubr", quietly = TRUE)) stop("Package 'ggpubr' is required.")
   if (!all(c(group_col, celltype_col, sample_col) %in% colnames(sce@meta.data))) {
-    stop("❌ Columns not found in meta.data.")
+    stop("\u274C Columns not found in meta.data.")
   }
 
-  # --- 2. 数据准备 ---
+  # --- 2. \u6570\u636E\u51C6\u5907 ---
   meta_df <- Seurat::FetchData(sce, vars = c(group_col, celltype_col, sample_col))
   colnames(meta_df) <- c("Group", "CellType", "Sample")
   meta_df$Group <- as.factor(meta_df$Group)
 
   if (!is.null(ref_group) && !ref_group %in% levels(meta_df$Group)) {
-    stop(paste0("❌ ref_group '", ref_group, "' not found."))
+    stop(paste0("\u274C ref_group '", ref_group, "' not found."))
   }
 
   sample_info <- meta_df |> dplyr::select("Sample", "Group") |> dplyr::distinct()
@@ -518,68 +520,68 @@ scVisRatioBox <- function(sce,
     dplyr::mutate(Ratio = .data$n / sum(.data$n)) |>
     dplyr::ungroup()
 
-  # --- 3. 智能配色 ---
+  # --- 3. \u667A\u80FD\u914D\u8272 ---
   groups <- unique(ratio_data$Group)
   n_groups <- length(groups)
   if (is.null(palette)) {
-    # 更加柔和且区分度高的出版级配色
+    # \u66F4\u52A0\u67D4\u548C\u4E14\u533A\u5206\u5EA6\u9AD8\u7684\u51FA\u7248\u7EA7\u914D\u8272
     default_pal <- c("#EE6677", "#4477AA", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB")
     palette <- if (n_groups > length(default_pal)) scales::hue_pal()(n_groups) else default_pal[1:n_groups]
   }
 
-  # --- 4. 绘图 (美化核心) ---
+  # --- 4. \u7ED8\u56FE (\u7F8E\u5316\u6838\u5FC3) ---
   p <- ggplot2::ggplot(ratio_data, ggplot2::aes(x = .data$CellType, y = .data$Ratio, fill = .data$Group)) +
 
-    # 箱线图 (黑色边框，增强对比度)
+    # \u7BB1\u7EBF\u56FE (\u9ED1\u8272\u8FB9\u6846\uFF0C\u589E\u5F3A\u5BF9\u6BD4\u5EA6)
     ggplot2::geom_boxplot(
       outlier.shape = NA,
       alpha = 0.8,
       width = box_width,
-      color = "black", # 黑色边框更专业
-      size = 0.4,      # 边框线条粗细
+      color = "black", # \u9ED1\u8272\u8FB9\u6846\u66F4\u4E13\u4E1A
+      size = 0.4,      # \u8FB9\u6846\u7EBF\u6761\u7C97\u7EC6
       position = ggplot2::position_dodge(width = 0.8)
     ) +
 
-    # 散点 (带黑色描边，增加质感)
+    # \u6563\u70B9 (\u5E26\u9ED1\u8272\u63CF\u8FB9\uFF0C\u589E\u52A0\u8D28\u611F)
     ggplot2::geom_jitter(
-      ggplot2::aes(fill = .data$Group), # 用 fill 而不是 color，配合 shape=21 实现描边点
+      ggplot2::aes(fill = .data$Group), # \u7528 fill \u800C\u4E0D\u662F color\uFF0C\u914D\u5408 shape=21 \u5B9E\u73B0\u63CF\u8FB9\u70B9
       position = ggplot2::position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8),
       size = pt_size,
-      shape = 21,      # 空心圆，可填充颜色
-      color = "black", # 点的边框颜色
-      stroke = 0.3,    # 点的边框粗细
+      shape = 21,      # \u7A7A\u5FC3\u5706\uFF0C\u53EF\u586B\u5145\u989C\u8272
+      color = "black", # \u70B9\u7684\u8FB9\u6846\u989C\u8272
+      stroke = 0.3,    # \u70B9\u7684\u8FB9\u6846\u7C97\u7EC6
       alpha = 0.9,
       show.legend = FALSE
     ) +
 
-    # 标尺与轴
+    # \u6807\u5C3A\u4E0E\u8F74
     ggplot2::scale_fill_manual(values = palette) +
-    # 增加顶部 20% 留白，防止星星显示不全
+    # \u589E\u52A0\u9876\u90E8 20% \u7559\u767D\uFF0C\u9632\u6B62\u661F\u661F\u663E\u793A\u4E0D\u5168
     ggplot2::scale_y_continuous(labels = scales::percent, expand = ggplot2::expansion(mult = c(0.05, 0.2))) +
 
-    # 主题美化
+    # \u4E3B\u9898\u7F8E\u5316
     ggplot2::theme_classic(base_size = base_size) +
     ggplot2::labs(x = NULL, y = "Cell Proportion", fill = group_col) +
     ggplot2::theme(
-      # 坐标轴文字纯黑
+      # \u5750\u6807\u8F74\u6587\u5B57\u7EAF\u9ED1
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, color = "black", face = "plain"),
       axis.text.y = ggplot2::element_text(color = "black", face = "plain"),
       axis.line = ggplot2::element_line(color = "black", linewidth = 0.6),
       axis.ticks = ggplot2::element_line(color = "black"),
 
-      # 图例控制 (响应参数)
+      # \u56FE\u4F8B\u63A7\u5236 (\u54CD\u5E94\u53C2\u6570)
       legend.position = legend_position,
       legend.title = ggplot2::element_text(face = "bold"),
       legend.background = ggplot2::element_blank(),
 
-      # 网格线 (横向虚线辅助阅读)
+      # \u7F51\u683C\u7EBF (\u6A2A\u5411\u865A\u7EBF\u8F85\u52A9\u9605\u8BFB)
       panel.grid.major.y = ggplot2::element_line(color = "grey92", linetype = "dashed")
     )
 
-  # --- 5. 统计检验 ---
+  # --- 5. \u7EDF\u8BA1\u68C0\u9A8C ---
   tryCatch({
     if (!is.null(ref_group)) {
-      # 模式 A: 参考组对比 (打星号)
+      # \u6A21\u5F0F A: \u53C2\u8003\u7EC4\u5BF9\u6BD4 (\u6253\u661F\u53F7)
       p <- p + ggpubr::stat_compare_means(
         ggplot2::aes(group = .data$Group),
         method = sign_method,
@@ -590,7 +592,7 @@ scVisRatioBox <- function(sce,
         vjust = 0.5
       )
     } else {
-      # 模式 B: 自动判断 (2组=Wilcox, >2组=Kruskal)
+      # \u6A21\u5F0F B: \u81EA\u52A8\u5224\u65AD (2\u7EC4=Wilcox, >2\u7EC4=Kruskal)
       p <- p + ggpubr::stat_compare_means(
         ggplot2::aes(group = .data$Group),
         method = sign_method,
@@ -600,14 +602,84 @@ scVisRatioBox <- function(sce,
         vjust = -0.5
       )
     }
-  }, error = function(e) message("⚠️ Stats failed: ", e$message))
+  }, error = function(e) message("\u26A0\uFE0F Stats failed: ", e$message))
 
   return(p)
 }
 
-# =============== Ro/e 分布偏好  ================
+# =============== Ro/e \u5206\u5E03\u504F\u597D  ================
 # =============== 5.scVisRoePlot  ================
 # https://mp.weixin.qq.com/s/Fhz72Cjbd3zzCi1tB9xP5Q
+
+.scVisRoeLabels <- function(roe_mat, display.mode = c("symbol", "numeric", "none")) {
+  display.mode <- match.arg(display.mode)
+
+  if (display.mode == "none") {
+    return(FALSE)
+  }
+
+  if (display.mode == "numeric") {
+    display_mat <- matrix(
+      formatC(roe_mat, format = "f", digits = 2),
+      nrow = nrow(roe_mat),
+      ncol = ncol(roe_mat),
+      dimnames = dimnames(roe_mat)
+    )
+    return(display_mat)
+  }
+
+  display_mat <- ifelse(roe_mat >= 2, "+++",
+                        ifelse(roe_mat >= 1.5, "++",
+                               ifelse(roe_mat > 1.1, "+",
+                                      ifelse(roe_mat >= 0.9 & roe_mat <= 1.1, "",
+                                             ifelse(roe_mat >= 0.67, "-",
+                                                    ifelse(roe_mat >= 0.5, "--", "---"))))))
+
+  matrix(display_mat,
+         nrow = nrow(roe_mat),
+         ncol = ncol(roe_mat),
+         dimnames = dimnames(roe_mat))
+}
+
+.scVisRoeHeatmap <- function(roe_mat,
+                             title = "Ro/e Tissue Enrichment",
+                             display.mode = c("symbol", "numeric", "none"),
+                             cluster_rows = TRUE,
+                             cluster_cols = FALSE,
+                             font.size = 10,
+                             font.size.row = font.size,
+                             font.size.col = font.size,
+                             ...) {
+  display.mode <- match.arg(display.mode)
+
+  my_palette <- grDevices::colorRampPalette(c("#483D8B", "#00FFFF", "#F8F8FF", "#FF69B4", "#8B008B"))(100)
+
+  max_abs_deviation <- max(abs(roe_mat - 1), na.rm = TRUE)
+  if (max_abs_deviation == 0) max_abs_deviation <- 0.1
+
+  my_breaks <- seq(1 - max_abs_deviation,
+                   1 + max_abs_deviation,
+                   length.out = 101)
+
+  display_mat <- .scVisRoeLabels(roe_mat, display.mode)
+
+  p <- pheatmap::pheatmap(roe_mat,
+                          color = my_palette,
+                          breaks = my_breaks,
+                          display_numbers = display_mat,
+                          fontsize_number = font.size,
+                          fontsize_row = font.size.row,
+                          fontsize_col = font.size.col,
+                          cluster_rows = cluster_rows,
+                          cluster_cols = cluster_cols,
+                          border_color = "grey90",
+                          scale = "none",
+                          main = title,
+                          ...)
+  attr(p, "roe_mat") <- roe_mat
+  p
+}
+
 #' @title Visualize Ro/e (Tissue Enrichment) Heatmap
 #' @description Calculates and visualizes the Ratio of observed to expected (Ro/e) cell numbers,
 #' a metric popularized by Zemin Zhang's lab to quantify tissue enrichment/depletion preference.
@@ -620,12 +692,18 @@ scVisRatioBox <- function(sce,
 #' @param method Statistical method for calculation. Default "chisq".
 #' @param min.rowSum Minimum row sum to keep a cell type. Default 0.
 #' @param display.mode Mode for cell annotation ("symbol", "numeric", "none").
+#'   In "symbol" mode, labels are centered on Ro/e = 1:
+#'   "+++"/"++"/"+" indicate increasing enrichment, empty text indicates
+#'   approximately expected abundance, and "-"/"--"/"---" indicate depletion.
+#'   In "numeric" mode, Ro/e values are printed with two decimal places.
 #' @param cluster_rows Logical, whether to cluster rows. Default TRUE.
 #' @param cluster_cols Logical, whether to cluster columns. Default FALSE.
 #' @param font.size Font size for numbers/symbols. Default 10.
+#' @param font.size.row Font size for row names. Defaults to `font.size`.
+#' @param font.size.col Font size for column names. Defaults to `font.size`.
 #' @param ... Additional arguments passed to \code{pheatmap}.
 #'
-#' @return A pheatmap object (invisibly returns the Ro/e matrix).
+#' @return A pheatmap object with the Ro/e matrix attached as `attr(x, "roe_mat")`.
 #' @export
 #'
 #' @importFrom pheatmap pheatmap
@@ -635,32 +713,34 @@ scVisRoePlot <- function(sce,
                          group.by,
                          cell.type = "celltype",
                          sample.by = "orig.ident",
-                         title = "Ro/e Tissue Enrichment", # 新增标题参数
+                         title = "Ro/e Tissue Enrichment", # \u65B0\u589E\u6807\u9898\u53C2\u6570
                          method = "chisq",
                          min.rowSum = 0,
                          display.mode = c("symbol", "numeric", "none"),
                          cluster_rows = TRUE,
                          cluster_cols = FALSE,
                          font.size = 10,
+                         font.size.row = font.size,
+                         font.size.col = font.size,
                          ...) {
 
-  # 1. 检查依赖包 Startrac
+  # 1. \u68C0\u67E5\u4F9D\u8D56\u5305 Startrac
   if (!requireNamespace("Startrac", quietly = TRUE)) {
     stop("Package 'Startrac' is required for Ro/e calculation.\nPlease install it using: devtools::install_github('Japrin/STARTRAC')")
   }
 
-  # 2. 检查输入列
+  # 2. \u68C0\u67E5\u8F93\u5165\u5217
   if (!all(c(group.by, cell.type, sample.by) %in% colnames(sce@meta.data))) {
     stop("One or more specified columns not found in meta.data.")
   }
 
   display.mode <- match.arg(display.mode)
 
-  # 3. 计算 Ro/e 矩阵
+  # 3. \u8BA1\u7B97 Ro/e \u77E9\u9635
   message("Calculating Ro/e matrix using Startrac...")
   meta_data <- sce@meta.data
 
-  # 调用 Startrac (注意：直接传 meta_data 作为第一个参数)
+  # \u8C03\u7528 Startrac (\u6CE8\u610F\uFF1A\u76F4\u63A5\u4F20 meta_data \u4F5C\u4E3A\u7B2C\u4E00\u4E2A\u53C2\u6570)
   roe_mat <- Startrac::calTissueDist(meta_data,
                                      byPatient = FALSE,
                                      colname.cluster = cell.type,
@@ -669,43 +749,15 @@ scVisRoePlot <- function(sce,
                                      method = method,
                                      min.rowSum = min.rowSum)
 
-  # 4. 设置视觉风格
-  my_palette <- grDevices::colorRampPalette(c("#483D8B", "#00FFFF", "#F8F8FF", "#FF69B4", "#8B008B"))(100)
-
-  # 设置对称断点
-  max_abs_deviation <- max(abs(roe_mat - 1), na.rm = TRUE)
-  if (max_abs_deviation == 0) max_abs_deviation <- 0.1
-
-  my_breaks <- seq(1 - max_abs_deviation,
-                   1 + max_abs_deviation,
-                   length.out = 101)
-
-  # 5. 处理标注
-  if (display.mode == "symbol") {
-    display_mat <- ifelse(roe_mat > 1, "+++",
-                          ifelse(roe_mat > 0.8 & roe_mat <= 1, "++",
-                                 ifelse(roe_mat > 0.2 & roe_mat <= 0.8, "+",
-                                        ifelse(roe_mat > 0 & roe_mat <= 0.2, "+/-", "-"))))
-  } else if (display.mode == "numeric") {
-    display_mat <- TRUE
-  } else {
-    display_mat <- FALSE
-  }
-
-  # 6. 绘图 (将 title 传给 main 参数)
-  p <- pheatmap::pheatmap(roe_mat,
-                          color = my_palette,
-                          breaks = my_breaks,
-                          display_numbers = display_mat,
-                          fontsize_number = font.size,
-                          cluster_rows = cluster_rows,
-                          cluster_cols = cluster_cols,
-                          border_color = "grey90",
-                          scale = "none",
-                          main = title,  # 这里设置标题
-                          ...)
-
-  invisible(roe_mat)
+  .scVisRoeHeatmap(roe_mat,
+                   title = title,
+                   display.mode = display.mode,
+                   cluster_rows = cluster_rows,
+                   cluster_cols = cluster_cols,
+                   font.size = font.size,
+                   font.size.row = font.size.row,
+                   font.size.col = font.size.col,
+                   ...)
 }
 
 
@@ -769,20 +821,20 @@ scVisCellFC <- function(sce,
 
   # Check if columns exist
   if (!all(c(group_col, celltype_col) %in% colnames(sce@meta.data))) {
-    stop(paste0("❌ Columns '", group_col, "' or '", celltype_col, "' not found in meta.data."))
+    stop(paste0("\u274C Columns '", group_col, "' or '", celltype_col, "' not found in meta.data."))
   }
 
   # Smart Comparisons Handling: Normalize to a list
   # Logic: If it's not a list, wrap it. If it is a list, check contents.
   if (!is.list(comparisons)) {
     if (length(comparisons) != 2) {
-      stop("❌ For a single comparison, 'comparisons' must be a vector of length 2: c('Case', 'Control').")
+      stop("\u274C For a single comparison, 'comparisons' must be a vector of length 2: c('Case', 'Control').")
     }
     comparisons <- list(comparisons)
   } else {
     # Check if any element in the list is not length 2
     if (any(sapply(comparisons, length) != 2)) {
-      stop("❌ Every element in the 'comparisons' list must be a vector of length 2.")
+      stop("\u274C Every element in the 'comparisons' list must be a vector of length 2.")
     }
   }
 
@@ -792,7 +844,7 @@ scVisCellFC <- function(sce,
   missing_groups <- setdiff(all_requested_groups, available_groups)
 
   if (length(missing_groups) > 0) {
-    stop(paste0("❌ The following groups defined in 'comparisons' are missing from meta.data: ",
+    stop(paste0("\u274C The following groups defined in 'comparisons' are missing from meta.data: ",
                 paste(missing_groups, collapse = ", ")))
   }
 
@@ -978,7 +1030,7 @@ scVisDimSplit <- function(sce,
                           celltype_col,
                           groups = NULL,
                           sub_celltypes = NULL,
-                          reduction = "umap", # 通用参数
+                          reduction = "umap", # \u901A\u7528\u53C2\u6570
                           palette = NULL,
                           pt_size = 0.1,
                           global_contour = TRUE,
@@ -1116,7 +1168,7 @@ scVisDimSplit <- function(sce,
     plot_list[[grp]] <- p
   }
 
-  if (length(plot_list) == 0) stop("❌ No plots generated.")
+  if (length(plot_list) == 0) stop("\u274C No plots generated.")
 
   final_col <- if (is.null(ncol)) ceiling(sqrt(length(plot_list))) else ncol
   return(cowplot::plot_grid(plotlist = plot_list, nrow = NULL, ncol = final_col))
@@ -1200,7 +1252,7 @@ scVisCellRatio <- function(sce,
   meta <- tryCatch({
     Seurat::FetchData(sce, vars = c(group_col, celltype_col))
   }, error = function(e) {
-    stop(paste0("❌ Columns not found: '", group_col, "' or '", celltype_col, "'. Please check meta.data."))
+    stop(paste0("\u274C Columns not found: '", group_col, "' or '", celltype_col, "'. Please check meta.data."))
   })
 
   colnames(meta) <- c("group", "celltype")
@@ -1216,7 +1268,7 @@ scVisCellRatio <- function(sce,
   # Handle Group Order
   if (!is.null(group_order)) {
     missing <- setdiff(group_order, unique(plot_data$group))
-    if(length(missing) > 0) warning("⚠️ Groups in 'group_order' missing from data.")
+    if(length(missing) > 0) warning("\u26A0\uFE0F Groups in 'group_order' missing from data.")
     plot_data$group <- factor(plot_data$group, levels = group_order)
   }
 
@@ -1233,7 +1285,7 @@ scVisCellRatio <- function(sce,
     )
 
     if (n_types > length(ref_pal)) {
-      warning("⚠️ More cell types than default 15 colors. Extending palette with hue_pal.")
+      warning("\u26A0\uFE0F More cell types than default 15 colors. Extending palette with hue_pal.")
       my_colors <- scales::hue_pal()(n_types)
     } else {
       my_colors <- ref_pal[1:n_types]
@@ -1241,7 +1293,7 @@ scVisCellRatio <- function(sce,
   } else {
     if (is.null(names(palette))) {
       if (length(palette) < n_types) {
-        warning("⚠️ Not enough colors provided. Recycling palette.")
+        warning("\u26A0\uFE0F Not enough colors provided. Recycling palette.")
         palette <- rep(palette, length.out = n_types)
       }
       my_colors <- palette[1:n_types]
@@ -1341,7 +1393,7 @@ scVisVlnPlot <- function(sce,
                          base_size = 15,
                          ...) {
 
-  # 1. 参数对齐与基础设置
+  # 1. \u53C2\u6570\u5BF9\u9F50\u4E0E\u57FA\u7840\u8BBE\u7F6E
   args <- list(...)
   if (is.null(group.by)) group.by <- "scVis_ident"
   if (is.null(sce@meta.data[[group.by]])) sce[[group.by]] <- Seurat::Idents(sce)
@@ -1349,7 +1401,7 @@ scVisVlnPlot <- function(sce,
   if (is.null(split.by) && "split_by" %in% names(args)) split.by <- args$split_by
   if ("pt.size" %in% names(args)) pt_size <- args$pt.size
 
-  # 2. 调色盘逻辑
+  # 2. \u8C03\u8272\u76D8\u903B\u8F91
   color_by <- if (!is.null(split.by)) split.by else group.by
   lvls <- levels(as.factor(sce@meta.data[[color_by]]))
   if (is.null(palette)) {
@@ -1357,14 +1409,14 @@ scVisVlnPlot <- function(sce,
     if (!all(names(palette) %in% lvls)) palette <- grDevices::hcl.colors(length(lvls), "Dark 3")
   }
 
-  # 3. 自动化比较
+  # 3. \u81EA\u52A8\u5316\u6BD4\u8F83
   if (is.null(comparisons) && auto_compare) {
     comp_lvls <- if (is.null(split.by)) lvls else levels(as.factor(sce@meta.data[[split.by]]))
     if (length(comp_lvls) >= 2) comparisons <- utils::combn(comp_lvls, 2, simplify = FALSE)
   }
   if (!is.null(comparisons) && !is.list(comparisons)) comparisons <- list(comparisons)
 
-  # 4. 绘图循环
+  # 4. \u7ED8\u56FE\u5FAA\u73AF
   plot_list <- list()
   for (feature in features) {
     dat <- Seurat::FetchData(sce, vars = c(feature, group.by, split.by), assay = assay, layer = layer)
@@ -1403,7 +1455,7 @@ scVisVlnPlot <- function(sce,
       ) +
       ggplot2::labs(title = feature)
 
-    # 5. 统计
+    # 5. \u7EDF\u8BA1
     if (!is.null(comparisons)) {
       v_just <- ifelse(sign_label %in% c("p.signif", "p.adj.signif"), 0.4, 0.55)
 

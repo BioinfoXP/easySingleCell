@@ -10,7 +10,14 @@
 #'   - "counts", "logcounts", etc.: uses `adata.layers['name']`.
 #'   If the requested type is not found, it automatically falls back to "X".
 #' @param assay Name of the assay to create in Seurat object. Default is "RNA".
+#' @param project Project name for the returned Seurat object. If NULL, uses the input file name.
 #' @param verbose Logical. Print progress messages. Default is TRUE.
+#' @param import_obsm Logical. Whether to import AnnData `obsm` entries.
+#' @param import_uns Logical. Whether to import AnnData `uns` entries into `@misc$uns`.
+#' @param store_non_reduction_obsm_as_meta Logical. Store non-reduction `obsm` matrices in `meta.data`.
+#' @param skip_obsm_patterns Character vector of `obsm` name patterns to skip as reductions.
+#' @param reduction_patterns Character vector of `obsm` name patterns to import as reductions.
+#' @param make_unique_features Logical. Make duplicated feature names unique before creating the Seurat object.
 #'
 #' @return A Seurat object.
 #' @export
@@ -29,7 +36,7 @@ readH5AD <- function(
 ) {
 
   # ============================================================================
-  # 0. 检查依赖
+  # 0. \u68C0\u67E5\u4F9D\u8D56
   # ============================================================================
   required_pkgs <- c("reticulate", "Matrix", "Seurat")
   missing_pkgs <- required_pkgs[!vapply(required_pkgs, requireNamespace, logical(1), quietly = TRUE)]
@@ -42,7 +49,7 @@ readH5AD <- function(
   }
 
   # ============================================================================
-  # 1. 工具函数
+  # 1. \u5DE5\u5177\u51FD\u6570
   # ============================================================================
   .msg <- function(...) {
     if (isTRUE(verbose)) message(...)
@@ -66,7 +73,7 @@ readH5AD <- function(
   }
 
   .to_sparse_feature_by_cell <- function(x) {
-    # x 预期是 cells x genes，需要转成 genes x cells
+    # x \u9884\u671F\u662F cells x genes\uFF0C\u9700\u8981\u8F6C\u6210 genes x cells
     xr <- reticulate::py_to_r(x)
 
     if (inherits(xr, "dgRMatrix")) {
@@ -150,7 +157,7 @@ readH5AD <- function(
   }
 
   # ============================================================================
-  # 2. 读取 h5ad
+  # 2. \u8BFB\u53D6 h5ad
   # ============================================================================
   .msg("Reading H5AD file: ", file)
 
@@ -158,7 +165,7 @@ readH5AD <- function(
   adata <- ad$read_h5ad(file)
 
   # ============================================================================
-  # 3. 选择表达矩阵来源
+  # 3. \u9009\u62E9\u8868\u8FBE\u77E9\u9635\u6765\u6E90
   # ============================================================================
   matrix_data <- NULL
   var_names_py <- NULL
@@ -203,7 +210,7 @@ readH5AD <- function(
   }
 
   # ============================================================================
-  # 4. 表达矩阵转换
+  # 4. \u8868\u8FBE\u77E9\u9635\u8F6C\u6362
   # ============================================================================
   .msg("Converting matrix to sparse format...")
   counts <- .to_sparse_feature_by_cell(matrix_data)
@@ -260,7 +267,7 @@ readH5AD <- function(
   }
 
   # ============================================================================
-  # 6. 创建 Seurat 对象
+  # 6. \u521B\u5EFA Seurat \u5BF9\u8C61
   # ============================================================================
   .msg("Creating Seurat object...")
   if (is.null(project)) {
@@ -274,7 +281,7 @@ readH5AD <- function(
     project = project
   )
 
-  # 记录数据来源
+  # \u8BB0\u5F55\u6570\u636E\u6765\u6E90
   seurat_obj@misc$h5ad_info <- list(
     file = normalizePath(file, winslash = "/", mustWork = FALSE),
     data_source = data_source_used
@@ -284,7 +291,7 @@ readH5AD <- function(
   gc()
 
   # ============================================================================
-  # 7. 导入 obsm
+  # 7. \u5BFC\u5165 obsm
   # ============================================================================
   if (isTRUE(import_obsm) && !reticulate::py_is_null_xptr(adata$obsm)) {
 
@@ -312,14 +319,14 @@ readH5AD <- function(
           next
         }
 
-        # 预期 obsm 是 cells x dims
+        # \u9884\u671F obsm \u662F cells x dims
         if (nrow(emb_mat) != ncol(seurat_obj)) {
           .warn("Skipping obsm '", key, "': row count (", nrow(emb_mat),
                 ") does not match number of cells (", ncol(seurat_obj), ").")
           next
         }
 
-        # 先判断是否该跳过 reduction 导入
+        # \u5148\u5224\u65AD\u662F\u5426\u8BE5\u8DF3\u8FC7 reduction \u5BFC\u5165
         if (.should_skip_obsm(clean_key, skip_obsm_patterns)) {
           if (isTRUE(store_non_reduction_obsm_as_meta)) {
             meta_df <- as.data.frame(emb_mat)
@@ -339,7 +346,7 @@ readH5AD <- function(
           next
         }
 
-        # 如果不像标准 reduction，也可按选项存 meta.data
+        # \u5982\u679C\u4E0D\u50CF\u6807\u51C6 reduction\uFF0C\u4E5F\u53EF\u6309\u9009\u9879\u5B58 meta.data
         if (!.is_reduction_like(clean_key, reduction_patterns)) {
           if (isTRUE(store_non_reduction_obsm_as_meta)) {
             meta_df <- as.data.frame(emb_mat)
@@ -359,7 +366,7 @@ readH5AD <- function(
           next
         }
 
-        # reduction 命名去重
+        # reduction \u547D\u540D\u53BB\u91CD
         existing_reds <- names(seurat_obj@reductions)
         red_name <- .make_unique_case_insensitive(clean_key, existing_reds)
 
@@ -381,7 +388,7 @@ readH5AD <- function(
   }
 
   # ============================================================================
-  # 8. 可选导入 uns
+  # 8. \u53EF\u9009\u5BFC\u5165 uns
   # ============================================================================
   if (isTRUE(import_uns) && !reticulate::py_is_null_xptr(adata$uns)) {
     .msg("Importing uns into seurat_obj@misc$uns ...")
@@ -421,16 +428,16 @@ readH5AD <- function(
 #' @examples
 #' \dontrun{
 #'   library(Seurat)
-#'   # 使用 Seurat 自带的小型示例数据集
+#'   # Use a small Seurat example dataset.
 #'   data("pbmc_small")
 #'
-#'   # 定义输出路径 (这里使用临时文件演示)
+#'   # Define an output path for demonstration.
 #'   out_file <- tempfile(fileext = ".h5ad")
 #'
-#'   # 1. 基础导出 (默认导出 DefaultAssay)
+#'   # 1. Basic export using the default assay.
 #'   writeH5AD(pbmc_small, file = out_file)
 #'
-#'   # 2. 自定义参数导出 (指定 Assay 和 Layer 名称)
+#'   # 2. Custom export with explicit assay and layer names.
 #'   # writeH5AD(object = pbmc_small,
 #'   #           file = "output_sct.h5ad",
 #'   #           assay = "SCT",
@@ -450,37 +457,39 @@ writeH5AD <- function(object,
                       export_embeddings = TRUE,
                       verbose = TRUE) {
 
-  # --- 0. 内部辅助函数：V4/V5 兼容的数据提取 ---
+  # --- 0. \u5185\u90E8\u8F85\u52A9\u51FD\u6570\uFF1AV4/V5 \u517C\u5BB9\u7684\u6570\u636E\u63D0\u53D6 ---
   .get_matrix_data <- function(obj, assay, type) {
-    # 动态检查环境是否支持 V5
-    # 注意：这里不使用 importFrom，而是运行时检查，避免 V4 环境编译报错
+    # \u52A8\u6001\u68C0\u67E5\u73AF\u5883\u662F\u5426\u652F\u6301 V5
+    # \u6CE8\u610F\uFF1A\u8FD9\u91CC\u4E0D\u4F7F\u7528 importFrom\uFF0C\u800C\u662F\u8FD0\u884C\u65F6\u68C0\u67E5\uFF0C\u907F\u514D V4 \u73AF\u5883\u7F16\u8BD1\u62A5\u9519
     is_v5 <- tryCatch("LayerData" %in% getNamespaceExports("Seurat"), error = function(e) FALSE)
     mat <- NULL
 
     if (is_v5) {
-      # Seurat V5 逻辑 (使用 :: 动态调用，避免静态依赖)
-      # 这里的 Seurat::Layers 和 Seurat::LayerData 在 V4 环境下不会执行到，
-      # 所以不会报错，且不需要在 importFrom 中声明
-      avail_layers <- Seurat::Layers(obj, assay = assay)
+      # Seurat V5 \u903B\u8F91 (\u4F7F\u7528 :: \u52A8\u6001\u8C03\u7528\uFF0C\u907F\u514D\u9759\u6001\u4F9D\u8D56)
+      # \u8FD9\u91CC\u7684 Seurat::Layers \u548C Seurat::LayerData \u5728 V4 \u73AF\u5883\u4E0B\u4E0D\u4F1A\u6267\u884C\u5230\uFF0C
+      # \u6240\u4EE5\u4E0D\u4F1A\u62A5\u9519\uFF0C\u4E14\u4E0D\u9700\u8981\u5728 importFrom \u4E2D\u58F0\u660E
+      layers_fun <- getExportedValue("Seurat", "Layers")
+      layer_data_fun <- getExportedValue("Seurat", "LayerData")
+      avail_layers <- layers_fun(obj, assay = assay)
 
       if (type %in% avail_layers) {
         if(verbose) message(paste("  [V5] Extracting layer:", type))
-        mat <- Seurat::LayerData(obj, assay = assay, layer = type)
+        mat <- layer_data_fun(obj, assay = assay, layer = type)
       } else if (type == "counts" && "counts" %in% names(obj@assays[[assay]])) {
-        # V5 对象但可能是 V3/V4 转换过来的，没有 layer 只有 slot
+        # V5 \u5BF9\u8C61\u4F46\u53EF\u80FD\u662F V3/V4 \u8F6C\u6362\u8FC7\u6765\u7684\uFF0C\u6CA1\u6709 layer \u53EA\u6709 slot
         mat <- Seurat::GetAssayData(obj, assay = assay, slot = "counts")
       } else if (type == "data" && "data" %in% names(obj@assays[[assay]])) {
         mat <- Seurat::GetAssayData(obj, assay = assay, slot = "data")
       }
     } else {
-      # Seurat V4 逻辑
+      # Seurat V4 \u903B\u8F91
       if(verbose) message(paste("  [V4] Extracting slot:", type))
       try({
         mat <- Seurat::GetAssayData(obj, assay = assay, slot = type)
       }, silent = TRUE)
     }
 
-    # 如果是 BPCells (V5 on-disk)，需要转为内存矩阵
+    # \u5982\u679C\u662F BPCells (V5 on-disk)\uFF0C\u9700\u8981\u8F6C\u4E3A\u5185\u5B58\u77E9\u9635
     if (!is.null(mat) && inherits(mat, "IterableMatrix")) {
       if(verbose) message("  [BPCells] Converting on-disk matrix to in-memory dgCMatrix...")
       mat <- as(mat, "dgCMatrix")
@@ -489,19 +498,19 @@ writeH5AD <- function(object,
     return(mat)
   }
 
-  # 获取空间坐标 (兼容 V4/V5)
+  # \u83B7\u53D6\u7A7A\u95F4\u5750\u6807 (\u517C\u5BB9 V4/V5)
   .get_spatial_coords <- function(obj, img_key) {
     coords <- Seurat::GetTissueCoordinates(obj, image = img_key)
     cell_ids <- rownames(coords)
     if ("cell" %in% colnames(coords)) cell_ids <- coords$cell
 
-    # 尝试匹配列名
+    # \u5C1D\u8BD5\u5339\u914D\u5217\u540D
     target_cols <- c("imagecol", "imagerow")
     if (!all(target_cols %in% colnames(coords))) {
       if (all(c("x", "y") %in% colnames(coords))) {
         target_cols <- c("x", "y")
       } else {
-        # 最后的尝试：取前两列数值
+        # \u6700\u540E\u7684\u5C1D\u8BD5\uFF1A\u53D6\u524D\u4E24\u5217\u6570\u503C
         num_cols <- sapply(coords, is.numeric)
         target_cols <- colnames(coords)[num_cols][1:2]
       }
@@ -512,20 +521,20 @@ writeH5AD <- function(object,
     return(final_coords)
   }
 
-  # --- 1. 环境检查 ---
+  # --- 1. \u73AF\u5883\u68C0\u67E5 ---
   if (!requireNamespace("reticulate", quietly = TRUE)) stop("Install 'reticulate' first.")
 
   if (is.null(assay)) assay <- Seurat::DefaultAssay(object)
   if (verbose) message(paste("Exporting Assay:", assay))
 
-  # 加载 Python 库
+  # \u52A0\u8F7D Python \u5E93
   ad <- reticulate::import("anndata", convert = FALSE)
   pd <- reticulate::import("pandas", convert = FALSE)
   np <- reticulate::import("numpy", convert = FALSE)
 
-  # --- 2. 准备数据 ---
+  # --- 2. \u51C6\u5907\u6570\u636E ---
 
-  # 2.1 准备 X (Layer Data / Normalized)
+  # 2.1 \u51C6\u5907 X (Layer Data / Normalized)
   mat_X <- .get_matrix_data(object, assay, layer_data)
   if (is.null(mat_X)) {
     if (verbose) message("Layer 'data' not found. Using 'counts' as X.")
@@ -536,8 +545,8 @@ writeH5AD <- function(object,
   mat_X <- Matrix::t(mat_X)
   mat_X <- as(mat_X, "dgCMatrix")
 
-  # 2.2 准备 Layers (Raw Counts)
-  # 提前提取 counts 并放入 list，传给构造函数
+  # 2.2 \u51C6\u5907 Layers (Raw Counts)
+  # \u63D0\u524D\u63D0\u53D6 counts \u5E76\u653E\u5165 list\uFF0C\u4F20\u7ED9\u6784\u9020\u51FD\u6570
   layers_list <- list()
   mat_counts <- .get_matrix_data(object, assay, layer_counts)
 
@@ -548,15 +557,15 @@ writeH5AD <- function(object,
     layers_list[[layer_counts]] <- mat_counts
   }
 
-  # 2.3 准备 MetaData
+  # 2.3 \u51C6\u5907 MetaData
   meta_df <- object@meta.data
   i <- sapply(meta_df, is.factor)
   meta_df[i] <- lapply(meta_df[i], as.character) # Factor -> Char
 
-  # --- 3. 创建 AnnData ---
+  # --- 3. \u521B\u5EFA AnnData ---
   if (verbose) message("Creating AnnData object...")
 
-  # 直接在构造函数中传入 layers
+  # \u76F4\u63A5\u5728\u6784\u9020\u51FD\u6570\u4E2D\u4F20\u5165 layers
   adata <- ad$AnnData(
     X = mat_X,
     obs = pd$DataFrame(meta_df),
@@ -564,7 +573,7 @@ writeH5AD <- function(object,
     layers = if(length(layers_list) > 0) layers_list else NULL
   )
 
-  # --- 4. 导出降维 (Embeddings) ---
+  # --- 4. \u5BFC\u51FA\u964D\u7EF4 (Embeddings) ---
   if (export_embeddings && length(object@reductions) > 0) {
     if (verbose) message("Exporting reductions...")
     for (red in names(object@reductions)) {
@@ -575,7 +584,7 @@ writeH5AD <- function(object,
     }
   }
 
-  # --- 5. 导出空间信息 (Spatial) ---
+  # --- 5. \u5BFC\u51FA\u7A7A\u95F4\u4FE1\u606F (Spatial) ---
   if (length(object@images) > 0) {
     if (verbose) message("Exporting spatial data (Images & Coordinates)...")
     img_key <- names(object@images)[1]
@@ -610,7 +619,7 @@ writeH5AD <- function(object,
     adata$uns[["spatial"]] <- reticulate::r_to_py(spatial_dict)
   }
 
-  # --- 6. 写入文件 ---
+  # --- 6. \u5199\u5165\u6587\u4EF6 ---
   if (verbose) message(paste("Writing H5AD to:", file))
   adata$write_h5ad(file)
   if (verbose) message("Done.")

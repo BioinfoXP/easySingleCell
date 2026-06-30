@@ -5,11 +5,23 @@
 \title{Run CytoTRACE Analysis (Simplified)}
 \usage{
 runCytoTRACEAnalysis(
-  scRNA,
+  object = NULL,
   group.by = "celltype",
   outdir = "./CytoTRACE_results",
-  ncores = 8
+  ncores = 8,
+  scRNA = object
 )
+}
+\arguments{
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
+
+\item{group.by}{Metadata column used as the phenotype annotation. Default \code{"celltype"}.}
+
+\item{outdir}{Directory for CytoTRACE result files and plots.}
+
+\item{ncores}{Number of cores passed to CytoTRACE.}
+
+\item{scRNA}{Backward-compatible alias for \code{object}.}
 }
 \description{
 A streamlined wrapper for CytoTRACE analysis on Seurat objects.

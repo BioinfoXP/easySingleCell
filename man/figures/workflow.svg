@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="420" viewBox="0 0 1080 420" role="img" aria-labelledby="title desc">
+  <title id="title">Seurat-style workflow in easySingleCell</title>
+  <desc id="desc">A workflow from a Seurat object through QC, preprocessing, optional analyses, enrichment, visualization, and ID conversion.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#607080"/>
+    </marker>
+    <style>
+      .bg { fill: #ffffff; }
+      .title { font: 700 30px Arial, sans-serif; fill: #17202a; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #5d6d7e; }
+      .node { fill: #f7f9fb; stroke: #d8e0e8; stroke-width: 2; rx: 8; }
+      .main { fill: #eef6fb; stroke: #1f77b4; }
+      .label { font: 700 17px Arial, sans-serif; fill: #17202a; }
+      .body { font: 400 13px Arial, sans-serif; fill: #34495e; }
+      .arrow { stroke: #607080; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .note { font: 700 13px Arial, sans-serif; fill: #1f77b4; }
+    </style>
+  </defs>
+  <rect class="bg" width="1080" height="420"/>
+  <text x="54" y="58" class="title">Seurat-style single-cell workflow</text>
+  <text x="54" y="88" class="subtitle">Use object-centered arguments while keeping older aliases for existing scripts.</text>
+
+  <rect x="54" y="150" width="150" height="92" class="node main"/>
+  <text x="82" y="184" class="label">Seurat object</text>
+  <text x="82" y="212" class="body">object = sce</text>
+
+  <path d="M204 196 H268" class="arrow"/>
+  <rect x="268" y="150" width="150" height="92" class="node"/>
+  <text x="303" y="184" class="label">QC</text>
+  <text x="288" y="212" class="body">runScRNAQC()</text>
+
+  <path d="M418 196 H482" class="arrow"/>
+  <rect x="482" y="150" width="150" height="92" class="node"/>
+  <text x="505" y="184" class="label">Preprocess</text>
+  <text x="502" y="212" class="body">run_preprocess()</text>
+
+  <path d="M632 196 H696" class="arrow"/>
+  <rect x="696" y="150" width="150" height="92" class="node"/>
+  <text x="730" y="184" class="label">Optional</text>
+  <text x="716" y="212" class="body">Doublet, decontX,</text>
+  <text x="716" y="230" class="body">CopyKAT, trajectory</text>
+
+  <path d="M846 196 H910" class="arrow"/>
+  <rect x="910" y="150" width="150" height="92" class="node main"/>
+  <text x="943" y="184" class="label">Visualize</text>
+  <text x="930" y="212" class="body">scVis* / Viz*</text>
+
+  <rect x="268" y="302" width="364" height="58" class="node"/>
+  <text x="292" y="326" class="note">Seurat-style arguments</text>
+  <text x="292" y="348" class="body">object, group.by, split.by, assay, layer, reduction, dims</text>
+
+  <rect x="696" y="302" width="364" height="58" class="node"/>
+  <text x="720" y="326" class="note">Enrichment and ID conversion</text>
+  <text x="720" y="348" class="body">scGSEA(), SYMBOL, ENSEMBL, ENTREZID, ALIAS, UNIPROT...</text>
+</svg>

@@ -8,9 +8,10 @@ DepmapMetaSelect(
   query,
   col_name,
   rdata_path = "./Depmap/DepMap_Processed.Rdata",
-  model = "gpt-4o",
+  model = NULL,
   api_key = NULL,
-  base_url = "https://api.gpt.ge/v1",
+  base_url = NULL,
+  endpoint = NULL,
   verbose = TRUE
 )
 }
@@ -21,11 +22,16 @@ DepmapMetaSelect(
 
 \item{rdata_path}{Path to processed RData.}
 
-\item{model}{LLM model name.}
+\item{model}{Character or NULL. LLM model name. If \code{NULL}, uses the
+internal general AI model from \code{R/AI_config.R}.}
 
-\item{api_key}{OpenAI API Key.}
+\item{api_key}{OpenAI-compatible API key. Defaults to \code{OPENAI_API_KEY}.}
 
-\item{base_url}{API Base URL.}
+\item{base_url}{Character or NULL. OpenAI-compatible API base URL. If
+\code{NULL}, uses the internal base URL from \code{R/AI_config.R}.}
+
+\item{endpoint}{Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+\code{"responses"}. \code{NULL} uses the package default \code{"auto"}.}
 
 \item{verbose}{Print debug info.}
 }

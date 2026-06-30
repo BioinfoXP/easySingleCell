@@ -8,8 +8,9 @@ GEO_Classify_AI(
   input_data,
   batch_size = 50,
   api_key = NULL,
-  model = "gpt-5-nano",
-  base_url = "https://api.gpt.ge/v1",
+  model = NULL,
+  base_url = NULL,
+  endpoint = NULL,
   verbose = TRUE
 )
 }
@@ -18,11 +19,16 @@ GEO_Classify_AI(
 
 \item{batch_size}{Numeric. Number of rows to process per API call (Default 50).}
 
-\item{api_key}{OpenAI API Key.}
+\item{api_key}{OpenAI-compatible API key. Defaults to \code{OPENAI_API_KEY}.}
 
-\item{model}{LLM model (default "gpt-5-nano").}
+\item{model}{Character or NULL. LLM model. If \code{NULL}, uses the
+internal general AI model from \code{R/AI_config.R}.}
 
-\item{base_url}{API Base URL.}
+\item{base_url}{Character or NULL. OpenAI-compatible API base URL. If
+\code{NULL}, uses the internal base URL from \code{R/AI_config.R}.}
+
+\item{endpoint}{Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+\code{"responses"}. \code{NULL} uses the package default \code{"auto"}.}
 
 \item{verbose}{Logical. Show progress bar.}
 }
@@ -46,19 +52,19 @@ The input \code{input_data} must contain at least:
 
 \examples{
 \dontrun{
-  # 1. 读取原始数据
-  # raw_df <- read.csv("1.肝癌.xlsx - Sheet1.csv")
+  # 1. Read raw GEO metadata.
+  # raw_df <- read.csv("geo_metadata.csv")
 
-  # 2. 运行分类 (打标签)
+  # 2. Run classification.
   classified_df <- GEO_Classify_AI(
     input_data = raw_df,
     api_key = "sk-xxxxxx"
   )
 
-  # 3. 查看分类结果统计
+  # 3. Inspect classification summary.
   table(classified_df$AI_SeqType)
 
-  # 4. (可选) 将结果保存，供后续筛选使用
+  # 4. Optionally save results for downstream screening.
   # save(classified_df, file = "geo_classified.Rdata")
 }
 }

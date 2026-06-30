@@ -1,9 +1,9 @@
 # =============== 1. The Best 100 Colors & Generic Palette System ================
 
 #' @title Select Colors from Predefined Palettes
-#' @description 导出函数，允许用户从 100 种预定义方案中选择颜色。
-#' @param palette_num 1 到 100 的整数。
-#' @param n 需要生成的颜色数量。若为 NULL，返回方案原始颜色。
+#' @description Select colors from 100 predefined palette schemes.
+#' @param palette_num Integer from 1 to 100.
+#' @param n Number of colors to generate. If \code{NULL}, returns the original scheme colors.
 #' @export
 Best100 <- function(palette_num, n = NULL) {
   if (palette_num < 1 || palette_num > 100) {
@@ -118,12 +118,12 @@ Best100 <- function(palette_num, n = NULL) {
 
   if (base::is.null(n)) base::return(chosen_palette)
 
-  # 使用 grDevices 标准化插值，确保颜色过渡平滑
+  # \u4F7F\u7528 grDevices \u6807\u51C6\u5316\u63D2\u503C\uFF0C\u786E\u4FDD\u989C\u8272\u8FC7\u6E21\u5E73\u6ED1
   base::return(grDevices::colorRampPalette(chosen_palette)(n))
 }
 
-#' @title 配色获取泛型函数
-#' @description 内部 S3 泛型系统，根据输入类型自动分发配色逻辑。
+#' @title Generic Palette Resolver
+#' @description Internal S3 generic that dispatches palette resolution by input type.
 #' @keywords internal
 .get_pal <- function(x, n = NULL, ...) {
   base::UseMethod(".get_pal")
@@ -132,7 +132,7 @@ Best100 <- function(palette_num, n = NULL) {
 #' @method .get_pal default
 #' @keywords internal
 .get_pal.default <- function(x, n = NULL, ...) {
-  if (base::is.null(x)) base::return(Best100(100, n = n)) # 默认 Scheme 100
+  if (base::is.null(x)) base::return(Best100(100, n = n)) # \u9ED8\u8BA4 Scheme 100
   if (base::is.null(n)) base::return(x)
   base::return(grDevices::colorRampPalette(x)(n))
 }

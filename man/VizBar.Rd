@@ -71,10 +71,10 @@ automatic pairwise comparisons, and options for SD/SE error bars.
 }
 \examples{
 \dontrun{
-  # 1. 默认显示散点
+  # 1. Default plot with jitter points.
   VizBar(df, x_col = "Group", y_col = "Value")
 
-  # 2. 隐藏散点 (add_dots = FALSE)
+  # 2. Hide jitter points.
   VizBar(df, x_col = "Group", y_col = "Value", add_dots = FALSE)
 }
 }

@@ -3,11 +3,13 @@
 #' Runs CopyKAT on a Seurat object sample by sample.
 #' Supports either sample-specific references or a shared global reference pool.
 #'
-#' @param sce A Seurat object.
+#' @param object A Seurat object. This Seurat-style argument is preferred.
 #' @param target_class String. The cell type to investigate.
 #' @param ref_classes Vector of strings. The normal reference cell types.
 #' @param sample_col String. Metadata column for sample IDs. Default: "orig.ident".
+#' @param sample.by Seurat-style alias for `sample_col`.
 #' @param celltype_col String. Metadata column for cell types. Default: "celltype".
+#' @param group.by Seurat-style alias for `celltype_col`.
 #' @param assay String. Assay to use. Default: "RNA".
 #' @param output_dir String. Directory to save results. Default: "./CopyKAT".
 #' @param overwrite Logical. If TRUE, re-runs existing samples. Default: FALSE.
@@ -21,15 +23,18 @@
 #' @param KS.cut Numeric. Passed to copykat().
 #' @param ngene.chr Integer. Passed to copykat().
 #' @param win.size Integer. Passed to copykat().
+#' @param sce Backward-compatible alias for `object`.
 #' @param ... Additional arguments passed to copykat().
 #'
 #' @return Invisible data.frame of the combined results.
 #' @export
-runCopyKAT <- function(sce,
+runCopyKAT <- function(object = NULL,
                             target_class,
                             ref_classes,
                             sample_col = "orig.ident",
+                            sample.by = NULL,
                             celltype_col = "celltype",
+                            group.by = NULL,
                             assay = "RNA",
                             output_dir = "./CopyKAT",
                             overwrite = FALSE,
@@ -43,19 +48,20 @@ runCopyKAT <- function(sce,
                             KS.cut = 0.1,
                             ngene.chr = 5,
                             win.size = 25,
+                            sce = object,
                             ...) {
 
   ref_mode <- match.arg(ref_mode)
+  if (is.null(sce)) stop("A Seurat object must be provided via 'object' or 'sce'.")
+  if (!is.null(sample.by)) sample_col <- sample.by
+  if (!is.null(group.by)) celltype_col <- group.by
 
   # --- 1. Environment Setup ---
   requireNamespace("Seurat", quietly = TRUE)
   requireNamespace("dplyr", quietly = TRUE)
   requireNamespace("tibble", quietly = TRUE)
 
-  if (!"package:copykat" %in% search()) {
-    message(">> Loading copykat package...")
-    library(copykat)
-  }
+  if (!requireNamespace("copykat", quietly = TRUE)) stop("Package 'copykat' is required.")
 
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
@@ -133,7 +139,7 @@ runCopyKAT <- function(sce,
     if (!overwrite && !is.null(found_file)) {
       message(sprintf("   [Found] %s. Loading...", basename(found_file)))
       tryCatch({
-        pred <- read.table(found_file, header = TRUE, check.names = FALSE, sep = "\t")
+        pred <- utils::read.table(found_file, header = TRUE, check.names = FALSE, sep = "\t")
         if (!"cell_id" %in% colnames(pred)) pred <- tibble::rownames_to_column(pred, "cell_id")
         pred$sample_id <- sid
         prediction_results[[sid]] <- pred
@@ -184,7 +190,7 @@ runCopyKAT <- function(sce,
       if (!dir.exists(sample_subdir)) dir.create(sample_subdir, recursive = TRUE)
       setwd(sample_subdir)
 
-      res <- copykat(
+      res <- copykat::copykat(
         rawmat = mat_comb,
         norm.cell.names = curr_ref,
         sam.name = paste0("S_", sid),
@@ -225,18 +231,14 @@ runCopyKAT <- function(sce,
 
   message("\n>> Aggregating results...")
   final_df <- dplyr::bind_rows(prediction_results)
-
-  final_df <- final_df %>%
-    dplyr::mutate(
-      raw_id = cell_id,
-      cleaned_id = mapply(function(id, samp) {
-        gsub(paste0("^(S_)?", samp, "\\."), "", id)
-      }, raw_id, sample_id)
-    ) %>%
-    dplyr::select(sample_id, raw_id, cleaned_id, copykat.pred, everything())
+  final_df$raw_id <- final_df$cell_id
+  final_df$cleaned_id <- mapply(function(id, samp) {
+    gsub(paste0("^(S_)?", samp, "\\."), "", id)
+  }, final_df$raw_id, final_df$sample_id)
+  final_df <- dplyr::select(final_df, "sample_id", "raw_id", "cleaned_id", "copykat.pred", dplyr::everything())
 
   out_file <- file.path(output_dir, "AllSamples_CopyKAT_prediction.csv")
-  write.csv(final_df, file = out_file, row.names = FALSE)
+  utils::write.csv(final_df, file = out_file, row.names = FALSE)
 
   message(sprintf(">> SUCCESS. Results saved to: %s", out_file))
   message(">> Use read.csv() to load this file and AddMetaData() to annotate your object.")

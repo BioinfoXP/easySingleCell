@@ -2,128 +2,285 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Introduction
+`easySingleCell` is a Seurat-oriented R package for common single-cell, bulk transcriptomics, GEO metadata screening, DepMap visualization, gene ID conversion, and function-level model-assisted annotation workflows. The package keeps exported APIs focused on analysis helpers and does not provide an interactive AI chat assistant.
 
-`easySingleCell` is an R package designed to streamline bioinformatics analysis for single-cell RNA sequencing (scRNA-seq) data. It provides a suite of functions to perform various analyses, including colocalization analysis using MistyR and Seurat, normalization, clustering, trajectory analysis, and more. The package aims to simplify the handling of complex single-cell data, making it accessible for researchers working with data from sources such as The Cancer Genome Atlas (TCGA) and other single-cell datasets.
+![easySingleCell module map](man/figures/module-map.svg)
 
-## Features
+## Available Modules
 
-- **Colocalization Analysis**: Utilize MistyR and Seurat for colocalization analysis, facilitating the study of spatial gene expression patterns.
-- **Normalization and Clustering**: Functions for normalizing scRNA-seq data and performing clustering to identify distinct cell populations.
-- **Trajectory Analysis**: Tools for trajectory inference to study cell differentiation processes.
-- **Metabolic Pathway Analysis**: Analyze metabolic pathways and generate visualizations to understand cellular metabolism.
-- **Gene Set Enrichment Analysis (GSEA)**: Perform GSEA to identify enriched pathways and gene sets.
-- **Doublet Detection**: Identify and mark doublets in scRNA-seq data.
-- **Integration with TCGA Data**: Handle and analyze TCGA data based on single-gene expressions.
+| Module | Representative functions | Status | Notes |
+| --- | --- | --- | --- |
+| Project setup | `creat_project()` | Available | Creates a standard analysis project layout. |
+| scRNA QC and preprocessing | `runScRNAQC()`, `run_preprocess()` | Available | Uses Seurat-style arguments such as `object =`, `group.by =`, `dims =`. |
+| Doublet and contamination | `runDoubletFinderAnalysis()`, `run_decontX()` | Optional | Requires optional packages such as `DoubletFinder` or `celda`. |
+| CNA, trajectory, stemness | `runCopyKAT()`, `runMonocleAnalysis()`, `runCytoTRACEAnalysis()` | Optional | Depends on external tools or optional R packages. |
+| Single-cell visualization | `scVisDimPlot()`, `scVisFeaturePlot()`, `scVisDotPlot()`, `scVisVlnPlot()` | Available | Wrappers around Seurat metadata and ggplot2 workflows. |
+| Cell composition | `scVisCellRatio()`, `scVisRatioBox()`, `scVisCellFC()`, `scVisRoePlot()` | Available or optional | Ro/e symbols are centered on Ro/e = 1. |
+| Single-cell enrichment | `scGSEA()` | Available | Runs Seurat-style `FindMarkers()` plus preranked GO GSEA. |
+| Cell type annotation | `AutoCellType()` | Requires API | LLM-assisted annotation from marker genes. |
+| Bulk analysis | `BulkLimma()`, `BulkGseGO()` | Available | Designed for cleaned genes x samples expression matrices. |
+| GEO and DepMap AI helpers | `GEO_Classify_AI()`, `GEO_Screen_AI()`, `DepmapMetaSelect()` | Requires API | Uses OpenAI-compatible APIs for semantic classification or selection. |
+| DepMap plotting | `DepmapPrepare()`, `DepmapBox()`, `DepmapScatter()` | Available | Uses local DepMap CSV files or processed RData. |
+| ID conversion | `convert_id()`, `convert_sce_id()` | Available | Supports OrgDb keytypes beyond Ensembl/Symbol, including ENTREZID, ALIAS, UNIPROT, and REFSEQ where available. |
+| h5ad exchange | `readH5AD()`, `writeH5AD()` | Optional | Requires `reticulate` and a compatible Python/AnnData environment. |
 
-## Environment prepare
+## Workflow Vignettes
 
-To install the development version of `easySingleCell`, use the following commands:
+The `vignettes/` folder is part of the formal R package source. The `.Rmd`
+files are installed as package vignettes, and the `.md` files are kept as
+source-tree reading copies.
 
-Tips: For R version 4.2.2 (2022-10-31), it is recommed.
-- Seurat 4.4.0
-- SeuratObject 4.1.4
-- Matrix 1.5-1
-- Matrix 1.6-1
-> Seurat: https://github.com/satijalab/seurat/releases
-> 
-> SeuratObject: https://github.com/satijalab/seurat-object/releases
-> 
-> Matrix: https://cran.r-project.org/src/contrib/Archive/Matrix/
+- [SingleCell_Workflow.Rmd](vignettes/SingleCell_Workflow.Rmd)
+- [Bulk_GEO_DepMap_Workflow.Rmd](vignettes/Bulk_GEO_DepMap_Workflow.Rmd)
 
+![Seurat-style workflow](man/figures/workflow.svg)
 
 ## Installation
 
-### Cran R packages
+Install from a local source checkout:
 
 ```r
-# Install CRAN packages one by one, checking if they are already installed
-if (!requireNamespace('tibble', quietly = TRUE)) install.packages('tibble')
-if (!requireNamespace('survival', quietly = TRUE)) install.packages('survival')
-if (!requireNamespace('survminer', quietly = TRUE)) install.packages('survminer')
-if (!requireNamespace('limma', quietly = TRUE)) install.packages('limma')
-if (!requireNamespace('DESeq2', quietly = TRUE)) install.packages('DESeq2')
-if (!requireNamespace('limSolve', quietly = TRUE)) install.packages('limSolve')
-if (!requireNamespace('GSVA', quietly = TRUE)) install.packages('GSVA')
-if (!requireNamespace('e1071', quietly = TRUE)) install.packages('e1071')
-if (!requireNamespace('preprocessCore', quietly = TRUE)) install.packages('preprocessCore')
-if (!requireNamespace('tidyHeatmap', quietly = TRUE)) install.packages('tidyHeatmap')
-if (!requireNamespace('caret', quietly = TRUE)) install.packages('caret')
-if (!requireNamespace('glmnet', quietly = TRUE)) install.packages('glmnet')
-if (!requireNamespace('ppcor', quietly = TRUE)) install.packages('ppcor')
-if (!requireNamespace('timeROC', quietly = TRUE)) install.packages('timeROC')
-if (!requireNamespace('pracma', quietly = TRUE)) install.packages('pracma')
-if (!requireNamespace('factoextra', quietly = TRUE)) install.packages('factoextra')
-if (!requireNamespace('FactoMineR', quietly = TRUE)) install.packages('FactoMineR')
-if (!requireNamespace('patchwork', quietly = TRUE)) install.packages('patchwork')
-if (!requireNamespace('ggplot2', quietly = TRUE)) install.packages('ggplot2')
-if (!requireNamespace('biomaRt', quietly = TRUE)) install.packages('biomaRt')
-if (!requireNamespace('ggpubr', quietly = TRUE)) install.packages('ggpubr')
-if (!requireNamespace('ComplexHeatmap', quietly = TRUE)) install.packages('ComplexHeatmap')
-if (!requireNamespace('export', quietly = TRUE)) install.packages('export')
-if (!requireNamespace('harmony', quietly = TRUE)) install.packages('harmony')
-if (!requireNamespace('vioplot', quietly = TRUE)) install.packages('vioplot')
+install.packages("E:/codex/bio_project/easySingleCell-main", repos = NULL, type = "source")
 ```
-### Biocmanager R packages
+
+Install from GitHub:
 
 ```r
-# Install Bioconductor manager if not already installed
-if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
 
-# Install Bioconductor packages one by one, checking if they are already installed
-if (!requireNamespace('mistyR', quietly = TRUE)) BiocManager::install('mistyR')
-if (!requireNamespace('CoGAPS', quietly = TRUE)) BiocManager::install('CoGAPS')
-if (!requireNamespace('Mfuzz', quietly = TRUE)) BiocManager::install('Mfuzz')
-if (!requireNamespace('UCSCXenaTools', quietly = TRUE)) BiocManager::install('UCSCXenaTools')
-if (!requireNamespace('WGCNA', quietly = TRUE)) BiocManager::install('WGCNA')
-if (!requireNamespace('igraph', quietly = TRUE)) BiocManager::install('igraph')
-if (!requireNamespace('GeneOverlap', quietly = TRUE)) BiocManager::install('GeneOverlap')
-if (!requireNamespace('ggrepel', quietly = TRUE)) BiocManager::install('ggrepel')
-if (!requireNamespace('UCell', quietly = TRUE)) BiocManager::install('UCell')
+remotes::install_github(
+  "BioinfoXP/easySingleCell",
+  upgrade = FALSE,
+  dependencies = TRUE
+)
 ```
-### Github R packages
 
+Core dependencies commonly needed in analysis projects:
 
 ```r
-# Install devtools if not already installed
-if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
 
-# Install GitHub packages one by one using devtools, checking if they are already installed
-if (!requireNamespace('ROGUE', quietly = TRUE)) devtools::install_github('PaulingLiu/ROGUE')
-if (!requireNamespace('ClusterGVis', quietly = TRUE)) devtools::install_github('junjunlab/ClusterGVis')
-if (!requireNamespace('ComplexHeatmap', quietly = TRUE)) devtools::install_github('jokergoo/ComplexHeatmap')
-if (!requireNamespace('Scillus', quietly = TRUE)) devtools::install_github('xmc811/Scillus@development')
-if (!requireNamespace('CoGAPS', quietly = TRUE)) devtools::install_github('FertigLab/CoGAPS')
-if (!requireNamespace('easySingleCell', quietly = TRUE)) devtools::install_github('BioinfoXP/easySingleCell')
-if (!requireNamespace('ggunchull', quietly = TRUE)) devtools::install_github('sajuukLyu/ggunchull')
-if (!requireNamespace('scRNAtoolVis', quietly = TRUE)) devtools::install_github('junjunlab/scRNAtoolVis')
-if (!requireNamespace('IOBR', quietly = TRUE)) devtools::install_github('IOBR/IOBR')
-if (!requireNamespace('CellChat', quietly = TRUE)) devtools::install_github('jinworks/CellChat')
-if (!requireNamespace('SCopeLoomR', quietly = TRUE)) devtools::install_github('aertslab/SCopeLoomR')
-if (!requireNamespace('hdWGCNA', quietly = TRUE)) devtools::install_github('smorabit/hdWGCNA')
-if (!requireNamespace('ktplots', quietly = TRUE)) devtools::install_github('zktuong/ktplots')
-if (!requireNamespace('scMetabolism', quietly = TRUE)) devtools::install_github('wu-yc/scMetabolism')
-if (!requireNamespace('VISION', quietly = TRUE)) devtools::install_github('YosefLab/VISION@v2.1.0')
-if (!requireNamespace('copykat', quietly = TRUE)) devtools::install_github("navinlabcode/copykat")
+BiocManager::install(c(
+  "AnnotationDbi",
+  "org.Hs.eg.db",
+  "clusterProfiler"
+))
+
+install.packages(c(
+  "Seurat",
+  "ggplot2",
+  "dplyr",
+  "tidyr",
+  "tibble",
+  "patchwork",
+  "harmony"
+))
 ```
 
-### Install easySingleCell
+Optional dependencies:
 
 ```r
-# Finally, install easySingleCell
-remotes::install_github("BioinfoXP/easySingleCell", upgrade = F, dependencies = F)
+# Ambient RNA contamination
+BiocManager::install("celda")
+
+# Mouse/rat ID conversion and scGSEA
+BiocManager::install(c("org.Mm.eg.db", "org.Rn.eg.db"))
+
+# CopyKAT / DoubletFinder are best installed in a project-specific environment.
+# remotes::install_github("navinlabcode/copykat")
+# remotes::install_github("chris-mcginnis-ucsf/DoubletFinder")
 ```
 
-## Vignettes
+## AI API Settings
 
-For more details, please read the files below!
+Only function-level AI helpers are kept:
 
-### [TCGA_Panel](vignettes/TCGA_Panel.md)
+- `AutoCellType()`
+- `GEO_Classify_AI()`
+- `GEO_Screen_AI()`
+- `DepmapMetaSelect()`
 
-The `TCGA_Panel` vignette provides detailed instructions and examples on how to use `easySingleCell` for analyzing TCGA data. It includes steps for data preprocessing, normalization, and various downstream analyses such as differential expression and pathway enrichment.
+These helpers use an internal OpenAI-compatible provider dispatcher. They do not read or write a persistent package config file. Resolution is simple:
 
-### [SingleCell_Panel](vignettes/SingleCell_Panel.md)
+- `api_key = NULL` reads `OPENAI_API_KEY`.
+- `model = NULL` uses the package default in `R/AI_config.R`.
+- `base_url = NULL` uses the package default in `R/AI_config.R`.
+- `endpoint = NULL` uses `auto`; `auto` routes between chat completions and Responses API endpoints when needed.
 
-The `SingleCell_Panel` vignette focuses on single-cell RNA-seq data analysis. It covers the entire workflow from raw data import, quality control, normalization, clustering, trajectory analysis, and visualization. This vignette is designed to help users get started with single-cell data analysis using the `easySingleCell` package, providing practical examples and best practices.
+Example:
 
-By following these vignettes, users can effectively utilize the `easySingleCell` package to perform comprehensive analyses on both bulk and single-cell RNA-seq data, gaining deeper insights into their biological questions.
+```r
+Sys.setenv(OPENAI_API_KEY = "sk-...")
+
+celltype_res <- AutoCellType(
+  input = markers,
+  tissuename = "Human liver tumor",
+  api_key = Sys.getenv("OPENAI_API_KEY"),
+  base_url = "https://api.gpt.ge/v1",
+  endpoint = "auto"
+)
+```
+
+For a Responses API endpoint, either pass a base URL ending in `/v1` with `endpoint = "responses"`, or pass a URL ending in `/v1/responses`.
+
+```r
+selected_geo <- GEO_Screen_AI(
+  input_data = geo_metadata,
+  disease = "pancreatic cancer",
+  data_type = "Bulk RNA-seq",
+  target_species = "Homo sapiens",
+  api_key = Sys.getenv("OPENAI_API_KEY"),
+  base_url = "https://your-provider.example/v1/responses",
+  endpoint = "auto"
+)
+```
+
+## Single-cell Quick Start
+
+```r
+library(easySingleCell)
+library(Seurat)
+
+sce <- runScRNAQC(
+  object = sce,
+  minGene = 200,
+  maxGene = 6000,
+  pctMT = 20,
+  maxCounts = 20000,
+  species = "human"
+)
+
+sce <- run_preprocess(
+  object = sce,
+  dims = 1:30,
+  group.by = "orig.ident",
+  n_features = 3000
+)
+```
+
+## Cell Proportion and Ro/e
+
+`scVisRoePlot()` computes observed/expected ratio. Ro/e is centered on `1`: `+`, `++`, and `+++` indicate increasing enrichment; blank labels indicate values close to expectation; `-`, `--`, and `---` indicate increasing depletion. `display.mode = "numeric"` prints two-decimal values directly.
+
+```r
+p_roe <- scVisRoePlot(
+  sce = sce,
+  group.by = "group",
+  cell.type = "celltype",
+  sample.by = "sample",
+  display.mode = "symbol",
+  font.size.row = 9,
+  font.size.col = 9
+)
+
+print(p_roe)
+roe_mat <- attr(p_roe, "roe_mat")
+```
+
+## Single-cell GSEA
+
+`scGSEA()` follows Seurat differential-expression style: it can call `FindMarkers()` internally and then run `clusterProfiler::gseGO()` on a preranked marker table.
+
+```r
+gsea_epithelial <- scGSEA(
+  object = sce,
+  ident.1 = "Tumor",
+  ident.2 = "Normal",
+  group.by = "group",
+  species = "human",
+  ont = "BP",
+  key_type = "SYMBOL"
+)
+
+head(gsea_epithelial$gsea)
+head(gsea_epithelial$markers)
+```
+
+Reuse an existing marker table:
+
+```r
+markers <- FindMarkers(
+  object = sce,
+  ident.1 = "Tumor",
+  ident.2 = "Normal",
+  group.by = "group",
+  logfc.threshold = 0
+)
+
+gsea_bp <- scGSEA(
+  markers = markers,
+  species = "human",
+  ont = "BP",
+  key_type = "SYMBOL"
+)
+```
+
+## Bulk Quick Start
+
+```r
+deg <- BulkLimma(
+  exp_mat = exp_mat,
+  metadata = metadata,
+  group_col = "condition",
+  case_group = "Tumor",
+  control_group = "Normal",
+  p_cutoff = 0.05,
+  logfc_cutoff = 1
+)
+
+gene_rank <- stats::setNames(deg$logFC, deg$symbol)
+gse_bp <- BulkGseGO(gene_rank = gene_rank, ont = "BP", key_type = "SYMBOL")
+```
+
+## ID Conversion
+
+`convert_id()` is based on `AnnotationDbi::mapIds()` and supports keytypes provided by the selected OrgDb. It is not limited to Ensembl/Symbol conversion.
+
+```r
+convert_id(
+  features = c("TP53", "EGFR"),
+  species = "human",
+  from_type = "symbol",
+  to_type = "uniprot"
+)
+```
+
+Cross-species conversion currently uses gene symbols as a quick bridge. Use a dedicated ortholog database for formal ortholog analysis.
+
+## Maintenance Entry Points
+
+Future package updates should start with these files:
+
+- `R/AI_config.R`: default `OPENAI_API_KEY` environment variable, model, `base_url`, endpoint, and provider routing.
+- `R/AI_provider.R`: OpenAI-compatible chat completions and Responses API request handling.
+- `R/AutoCellType.R`, `R/GEO_Index.R`, `R/Depmap.R`: user-facing model-assisted helper functions.
+- `vignettes/SingleCell_Workflow.Rmd` and `vignettes/Bulk_GEO_DepMap_Workflow.Rmd`: formal package vignettes.
+- `tests/testthat/test-ai-config.R`, `tests/testthat/test-ai-dispatcher.R`, `tests/testthat/test-scGSEA.R`, and `tests/testthat/test-package-hygiene.R`: provider routing, AI helper dispatch, enrichment, and package hygiene tests.
+
+Retained but excluded from formal R package builds:
+
+- `gitpush.sh`: release/push script retained by request.
+- `docs/`, `tools/`: maintenance notes and checks.
+- `easySingleCell.Rproj`, `.gitignore`: development environment files.
+
+## Verification
+
+In WSL or Linux R from the package root:
+
+```r
+pkgload::load_all(quiet = TRUE)
+testthat::test_dir("tests/testthat", reporter = "summary")
+```
+
+Installed smoke testing:
+
+```r
+library(easySingleCell)
+packageVersion("easySingleCell")
+stopifnot("scGSEA" %in% getNamespaceExports("easySingleCell"))
+stopifnot(!("easyAI" %in% getNamespaceExports("easySingleCell")))
+```

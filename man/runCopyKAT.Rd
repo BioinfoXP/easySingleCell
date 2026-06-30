@@ -5,11 +5,13 @@
 \title{Run CopyKAT by Sample or with Shared Reference}
 \usage{
 runCopyKAT(
-  sce,
+  object = NULL,
   target_class,
   ref_classes,
   sample_col = "orig.ident",
+  sample.by = NULL,
   celltype_col = "celltype",
+  group.by = NULL,
   assay = "RNA",
   output_dir = "./CopyKAT",
   overwrite = FALSE,
@@ -23,11 +25,12 @@ runCopyKAT(
   KS.cut = 0.1,
   ngene.chr = 5,
   win.size = 25,
+  sce = object,
   ...
 )
 }
 \arguments{
-\item{sce}{A Seurat object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
 \item{target_class}{String. The cell type to investigate.}
 
@@ -35,7 +38,11 @@ runCopyKAT(
 
 \item{sample_col}{String. Metadata column for sample IDs. Default: "orig.ident".}
 
+\item{sample.by}{Seurat-style alias for \code{sample_col}.}
+
 \item{celltype_col}{String. Metadata column for cell types. Default: "celltype".}
+
+\item{group.by}{Seurat-style alias for \code{celltype_col}.}
 
 \item{assay}{String. Assay to use. Default: "RNA".}
 
@@ -62,6 +69,8 @@ runCopyKAT(
 \item{ngene.chr}{Integer. Passed to copykat().}
 
 \item{win.size}{Integer. Passed to copykat().}
+
+\item{sce}{Backward-compatible alias for \code{object}.}
 
 \item{...}{Additional arguments passed to copykat().}
 }

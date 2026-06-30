@@ -15,11 +15,11 @@
 DepmapPrepare <- function(data_dir = "./Depmap",
                           force_process = FALSE) {
 
-  # 1. 建立目录
+  # 1. \u5EFA\u7ACB\u76EE\u5F55
   if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
 
-  # 定义所有需要的文件 (包含 Model.csv)
-  # 使用 list 方便后续按名称调用
+  # \u5B9A\u4E49\u6240\u6709\u9700\u8981\u7684\u6587\u4EF6 (\u5305\u542B Model.csv)
+  # \u4F7F\u7528 list \u65B9\u4FBF\u540E\u7EED\u6309\u540D\u79F0\u8C03\u7528
   target_files <- list(
     eff = "CRISPRGeneEffect.csv",
     dep = "CRISPRGeneDependency.csv",
@@ -27,61 +27,61 @@ DepmapPrepare <- function(data_dir = "./Depmap",
     meta = "Model.csv"
   )
 
-  # 将 list 转为字符向量用于检查文件是否存在
+  # \u5C06 list \u8F6C\u4E3A\u5B57\u7B26\u5411\u91CF\u7528\u4E8E\u68C0\u67E5\u6587\u4EF6\u662F\u5426\u5B58\u5728
   required_filenames <- unlist(target_files)
 
-  # 检查缺失文件
+  # \u68C0\u67E5\u7F3A\u5931\u6587\u4EF6
   missing_files <- required_filenames[!file.exists(file.path(data_dir, required_filenames))]
 
-  # === 场景 A: 文件缺失 -> 打印详细指引并停止 ===
+  # === \u573A\u666F A: \u6587\u4EF6\u7F3A\u5931 -> \u6253\u5370\u8BE6\u7EC6\u6307\u5F15\u5E76\u505C\u6B62 ===
   if (length(missing_files) > 0) {
     abs_path <- normalizePath(data_dir, mustWork = FALSE)
 
     message("\n=========================================================================")
-    message("❌ MISSING DATA FILES / 数据文件缺失")
+    message("\u274C MISSING DATA FILES / \u6570\u636E\u6587\u4EF6\u7F3A\u5931")
     message("-------------------------------------------------------------------------")
     message("The following files are missing in your data directory:")
     for (f in missing_files) {
       message(paste("   -", f))
     }
 
-    message("\nPLEASE DOWNLOAD MANUALLY / 请手动下载:")
+    message("\nPLEASE DOWNLOAD MANUALLY / \u8BF7\u624B\u52A8\u4E0B\u8F7D:")
     message("-------------------------------------------------------------------------")
 
-    message("🚀 Option 1: Fast Mirror (Recommended / 推荐高速下载):")
-    message("   🔗 https://www.123865.com/s/nnlSTd-JUj0h?pwd=DPMP")
-    message("   🔑 Password: DPMP")
+    message("\U0001F680 Option 1: Fast Mirror (Recommended / \u63A8\u8350\u9AD8\u901F\u4E0B\u8F7D):")
+    message("   \U0001F517 https://www.123865.com/s/nnlSTd-JUj0h?pwd=DPMP")
+    message("   \U0001F511 Password: DPMP")
 
-    message("\n🌐 Option 2: Official Direct Links (DepMap 25Q3):")
-    message("   (Requires DepMap Login / 需要登录官网)")
-    message("   1️⃣ CRISPRGeneEffect.csv:")
-    message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=CRISPRGeneEffect.csv")
-    message("   2️⃣ CRISPRGeneDependency.csv:")
-    message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=CRISPRGeneDependency.csv")
-    message("   3️⃣ OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv:")
-    message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv")
-    message("   4️⃣ Model.csv (Metadata):")
-    message("      👉 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=Model.csv")
+    message("\n\U0001F310 Option 2: Official Direct Links (DepMap 25Q3):")
+    message("   (Requires DepMap Login / \u9700\u8981\u767B\u5F55\u5B98\u7F51)")
+    message("   1\uFE0F\u20E3 CRISPRGeneEffect.csv:")
+    message("      \U0001F449 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=CRISPRGeneEffect.csv")
+    message("   2\uFE0F\u20E3 CRISPRGeneDependency.csv:")
+    message("      \U0001F449 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=CRISPRGeneDependency.csv")
+    message("   3\uFE0F\u20E3 OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv:")
+    message("      \U0001F449 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv")
+    message("   4\uFE0F\u20E3 Model.csv (Metadata):")
+    message("      \U0001F449 https://depmap.org/portal/api/download/file?releasename=DepMap%20Public%2025Q3&filename=Model.csv")
 
-    message("\n📂 ACTION REQUIRED:")
+    message("\n\U0001F4C2 ACTION REQUIRED:")
     message("   Download the files and move them into this folder:")
-    message(paste("   📂", abs_path))
+    message(paste("   \U0001F4C2", abs_path))
     message("=========================================================================\n")
 
     stop("Process halted. Please download the files and try again.")
   }
 
-  # === 场景 B: 文件存在 -> 开始处理 ===
+  # === \u573A\u666F B: \u6587\u4EF6\u5B58\u5728 -> \u5F00\u59CB\u5904\u7406 ===
   rdata_path <- file.path(data_dir, "DepMap_Processed.Rdata")
 
-  # 如果 RData 已存在且不强制更新，直接结束
+  # \u5982\u679C RData \u5DF2\u5B58\u5728\u4E14\u4E0D\u5F3A\u5236\u66F4\u65B0\uFF0C\u76F4\u63A5\u7ED3\u675F
   if (file.exists(rdata_path) && !force_process) {
-    message("✅ Processed data already exists: ", rdata_path)
+    message("\u2705 Processed data already exists: ", rdata_path)
     message("   Skipping processing. Use force_process=TRUE to overwrite.")
     return(invisible(NULL))
   }
 
-  message("✅ Files found! Starting data processing...")
+  message("\u2705 Files found! Starting data processing...")
   message(">>> Step 1/4: Reading CSVs (This may take 1-2 minutes)...")
 
   # --- Helper 1: Process Data Matrices ---
@@ -142,9 +142,9 @@ DepmapPrepare <- function(data_dir = "./Depmap",
     row.names(depmap_metadata)
   ))
 
-  if (length(common_ids) == 0) stop("❌ ERROR: 0 Common Cell Lines found! Check ID formats.")
+  if (length(common_ids) == 0) stop("\u274C ERROR: 0 Common Cell Lines found! Check ID formats.")
 
-  message(paste("    ✅ Common Cell Lines found:", length(common_ids)))
+  message(paste("    \u2705 Common Cell Lines found:", length(common_ids)))
 
   # --- Alignment ---
   message(">>> Step 3/4: Aligning data matrices...")
@@ -159,7 +159,7 @@ DepmapPrepare <- function(data_dir = "./Depmap",
 
   save(depmap_effect, depmap_dependency, depmap_expression, depmap_metadata, all_genes, file = rdata_path)
 
-  message("🎉 Done! Data is ready (Matrix + Metadata).")
+  message("\U0001F389 Done! Data is ready (Matrix + Metadata).")
 }
 # =============== DepMap Viz ================
 # =============== 2.DepmapBox ================
@@ -243,7 +243,7 @@ DepmapBox <- function(genes,
   # 4.1 Apply cell_filter
   if (!rlang::quo_is_null(filter_quo)) {
     if (!has_meta) stop("Metadata required for 'cell_filter'.")
-    message("ℹ️ Applying metadata filter...")
+    message("\u2139\uFE0F Applying metadata filter...")
     filtered_meta <- dplyr::filter(meta_df, !!filter_quo)
     target_ids <- rownames(filtered_meta)
   } else {
@@ -261,7 +261,7 @@ DepmapBox <- function(genes,
   if (length(final_ids) == 0) stop("Error: No cell lines matched.")
 
   if (length(final_ids) < nrow(dat_matrix)) {
-    message(sprintf("ℹ️ Subset: Plotting %d / %d cell lines.", length(final_ids), nrow(dat_matrix)))
+    message(sprintf("\u2139\uFE0F Subset: Plotting %d / %d cell lines.", length(final_ids), nrow(dat_matrix)))
   }
 
   dat_matrix <- dat_matrix[final_ids, , drop = FALSE]
@@ -377,7 +377,7 @@ DepmapScatter <- function(genes,
 
   if (!rlang::quo_is_null(filter_quo)) {
     if (!has_meta) stop("Metadata required for 'cell_filter'.")
-    message("ℹ️ Applying metadata filter...")
+    message("\u2139\uFE0F Applying metadata filter...")
     filtered_meta <- dplyr::filter(meta_df, !!filter_quo)
     target_ids <- rownames(filtered_meta)
   } else {
@@ -393,7 +393,7 @@ DepmapScatter <- function(genes,
   common_ids <- Reduce(intersect, list(rownames(dat_exp), rownames(dat_tar), target_ids))
 
   if (length(common_ids) == 0) stop("Error: 0 common cell lines found.")
-  if (length(common_ids) < nrow(dat_exp)) message(sprintf("ℹ️ Subset: Analyzing %d cell lines.", length(common_ids)))
+  if (length(common_ids) < nrow(dat_exp)) message(sprintf("\u2139\uFE0F Subset: Analyzing %d cell lines.", length(common_ids)))
 
   # 5. Process & Plot
   valid_genes <- intersect(genes, intersect(colnames(dat_exp), colnames(dat_tar)))
@@ -444,14 +444,17 @@ DepmapScatter <- function(genes,
 #' @param query String. Fuzzy search term (e.g., "Lung Cancer").
 #' @param col_name String. Metadata column (e.g., "OncotreePrimaryDisease").
 #' @param rdata_path Path to processed RData.
-#' @param model LLM model name.
-#' @param api_key OpenAI API Key.
-#' @param base_url API Base URL.
+#' @param model Character or NULL. LLM model name. If \code{NULL}, uses the
+#'   internal general AI model from \code{R/AI_config.R}.
+#' @param api_key OpenAI-compatible API key. Defaults to `OPENAI_API_KEY`.
+#' @param base_url Character or NULL. OpenAI-compatible API base URL. If
+#'   \code{NULL}, uses the internal base URL from \code{R/AI_config.R}.
+#' @param endpoint Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+#'   \code{"responses"}. \code{NULL} uses the package default \code{"auto"}.
 #' @param verbose Print debug info.
 #'
 #' @return A character vector of ModelIDs.
 #' @export
-#' @importFrom openai OpenAI
 #' @importFrom jsonlite fromJSON
 #' @importFrom glue glue
 #' @importFrom stringr str_remove_all
@@ -478,18 +481,24 @@ DepmapScatter <- function(genes,
 DepmapMetaSelect <- function(query,
                              col_name,
                              rdata_path = "./Depmap/DepMap_Processed.Rdata",
-                             model = "gpt-4o",
+                             model = NULL,
                              api_key = NULL,
-                             base_url = "https://api.gpt.ge/v1",
+                             base_url = NULL,
+                             endpoint = NULL,
                              verbose = TRUE) {
 
   # 1. Setup
-  pkgs <- c("openai", "jsonlite", "glue", "stringr", "dplyr")
+  provider <- .easyAI_build_provider(
+    api_key = api_key,
+    model = model,
+    base_url = base_url,
+    endpoint = endpoint,
+    task = "general"
+  )
+  api_key <- provider$api_key
+  pkgs <- c("jsonlite", "glue", "stringr", "dplyr")
   missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
   if (length(missing) > 0) stop("Missing packages: ", paste(missing, collapse=", "))
-
-  if (is.null(api_key)) api_key <- Sys.getenv("OPENAI_API_KEY")
-  if (api_key == "") stop("Please provide 'api_key'.")
 
   # 2. Load Metadata
   if (verbose) message(">>> Loading Metadata...")
@@ -501,9 +510,9 @@ DepmapMetaSelect <- function(query,
   if (!col_name %in% colnames(meta)) stop("Invalid column name: ", col_name)
 
   # 3. Prepare Context
-  valid_values <- unique(na.omit(meta[[col_name]]))
+  valid_values <- unique(stats::na.omit(meta[[col_name]]))
   values_str <- paste(valid_values, collapse = ", ")
-  if (verbose) message(glue::glue("ℹ️  Search Space: {length(valid_values)} values in '{col_name}'."))
+  if (verbose) message(glue::glue("\u2139\uFE0F  Search Space: {length(valid_values)} values in '{col_name}'."))
 
   # 4. Prompt
   sys_prompt <- glue::glue("
@@ -522,19 +531,21 @@ DepmapMetaSelect <- function(query,
 
   # 5. API Call
   if (verbose) message(glue::glue(">>> Searching for '{query}' in '{col_name}'..."))
-  client <- openai::OpenAI(api_key = api_key, base_url = base_url)
 
-  resp <- tryCatch({
-    client$chat$completions$create(
-      model = model,
-      messages = list(list(role = "system", content = sys_prompt), list(role = "user", content = user_msg)),
+  raw_text <- tryCatch({
+    .easyAI_call_provider_messages(
+      messages = list(
+        list(role = "system", content = sys_prompt),
+        list(role = "user", content = user_msg)
+      ),
+      provider = provider,
+      api_key = api_key,
       temperature = 0,
       response_format = list(type = "json_object")
     )
   }, error = function(e) stop("API Error: ", e$message))
 
   # 6. Parse
-  raw_text <- resp$choices[[1]]$message$content
   clean_text <- raw_text |>
     stringr::str_remove_all("^```json") |>
     stringr::str_remove_all("^```") |>
@@ -546,12 +557,12 @@ DepmapMetaSelect <- function(query,
   verified_vals <- intersect(matched_vals, valid_values)
 
   if (length(verified_vals) == 0) {
-    warning("⚠️ AI found no matching values.")
+    warning("\u26A0\uFE0F AI found no matching values.")
     return(character(0))
   }
 
   if (verbose) {
-    message("✅ AI Matches Found:")
+    message("\u2705 AI Matches Found:")
     print(verified_vals)
   }
 

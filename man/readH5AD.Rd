@@ -33,7 +33,21 @@ If the requested type is not found, it automatically falls back to "X".
 
 \item{assay}{Name of the assay to create in Seurat object. Default is "RNA".}
 
+\item{project}{Project name for the returned Seurat object. If NULL, uses the input file name.}
+
 \item{verbose}{Logical. Print progress messages. Default is TRUE.}
+
+\item{import_obsm}{Logical. Whether to import AnnData \code{obsm} entries.}
+
+\item{import_uns}{Logical. Whether to import AnnData \code{uns} entries into \verb{@misc$uns}.}
+
+\item{store_non_reduction_obsm_as_meta}{Logical. Store non-reduction \code{obsm} matrices in \code{meta.data}.}
+
+\item{skip_obsm_patterns}{Character vector of \code{obsm} name patterns to skip as reductions.}
+
+\item{reduction_patterns}{Character vector of \code{obsm} name patterns to import as reductions.}
+
+\item{make_unique_features}{Logical. Make duplicated feature names unique before creating the Seurat object.}
 }
 \value{
 A Seurat object.

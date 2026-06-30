@@ -1,4 +1,4 @@
-# =============== Limma 差异分析 ================
+# =============== Limma \u5DEE\u5F02\u5206\u6790 ================
 # =============== 1.Limma  ================
 #' @title Run Standard Limma Differential Expression Analysis (Auto-Aligned)
 #' @description A robust wrapper for limma. Automatically aligns expression matrix and metadata
@@ -20,31 +20,30 @@
 #'
 #' @examples
 #' \dontrun{
-#'   # 1. 创建模拟表达矩阵 (100基因 x 6样本)
+#'   # 1. Create a mock expression matrix (100 genes x 6 samples).
 #'   set.seed(123)
 #'   exp_data <- matrix(rnorm(600), nrow = 100, ncol = 6)
 #'   colnames(exp_data) <- c("S1", "S2", "S3", "S4", "S5", "S6")
 #'   rownames(exp_data) <- paste0("Gene", 1:100)
 #'
-#'   # 模拟差异：让前5个基因在 S4-S6 中高表达
+#'   # Simulate differential expression for the first five genes in S4-S6.
 #'   exp_data[1:5, 4:6] <- exp_data[1:5, 4:6] + 3
 #'
-#'   # 2. 创建元数据 (特意多加一个无关样本 S7，测试自动对齐功能)
+#'   # 2. Create metadata with one extra unused sample to test alignment.
 #'   meta_data <- data.frame(
 #'     row.names = c("S1", "S2", "S3", "S4", "S5", "S6", "S7_Unused"),
 #'     condition = c("Ctrl", "Ctrl", "Ctrl", "Treat", "Treat", "Treat", "Treat"),
 #'     batch = c(1, 1, 1, 2, 2, 2, 3)
 #'   )
 #'
-#'   # 3. 运行分析
-#'   # 函数会自动发现 exp_data 只有 S1-S6，从而自动丢弃 meta_data 中的 S7
+#'   # 3. Run the analysis. The function keeps only matched samples.
 #'   deg_res <- BulkLimma(exp_mat = exp_data,
 #'                        metadata = meta_data,
 #'                        group_col = "condition",
 #'                        case_group = "Treat",
 #'                        control_group = "Ctrl")
 #'
-#'   # 4. 查看结果
+#'   # 4. Inspect results.
 #'   head(deg_res)
 #'   table(deg_res$change)
 #' }
@@ -57,9 +56,9 @@ BulkLimma <- function(exp_mat,
                       p_cutoff = 0.05,
                       logfc_cutoff = 1) {
 
-  # --- 1. 自动对齐与检查 (关键修复) ---
+  # --- 1. \u81EA\u52A8\u5BF9\u9F50\u4E0E\u68C0\u67E5 (\u5173\u952E\u4FEE\u590D) ---
 
-  # 找出共有的样本 ID
+  # \u627E\u51FA\u5171\u6709\u7684\u6837\u672C ID
   common_samples <- intersect(colnames(exp_mat), rownames(metadata))
 
   if (length(common_samples) == 0) {
@@ -68,40 +67,40 @@ BulkLimma <- function(exp_mat,
 
   message(paste0("Matching samples: ", length(common_samples), " shared samples found."))
 
-  # 如果数量不一致，给出提示
+  # \u5982\u679C\u6570\u91CF\u4E0D\u4E00\u81F4\uFF0C\u7ED9\u51FA\u63D0\u793A
   if (length(common_samples) != ncol(exp_mat) || length(common_samples) != nrow(metadata)) {
     message("Subsetting data to matched samples only...")
   }
 
-  # 对齐数据：只保留共有样本，且顺序一致
+  # \u5BF9\u9F50\u6570\u636E\uFF1A\u53EA\u4FDD\u7559\u5171\u6709\u6837\u672C\uFF0C\u4E14\u987A\u5E8F\u4E00\u81F4
   exp_mat <- exp_mat[, common_samples]
   metadata <- metadata[common_samples, , drop = FALSE]
 
-  # 提取分组向量
+  # \u63D0\u53D6\u5206\u7EC4\u5411\u91CF
   group_vec <- metadata[[group_col]]
 
-  # --- 2. 检查分组有效性 ---
+  # --- 2. \u68C0\u67E5\u5206\u7EC4\u6709\u6548\u6027 ---
   if (!case_group %in% group_vec || !control_group %in% group_vec) {
     stop(paste0("Group names '", case_group, "' or '", control_group, "' not found in column '", group_col, "'."))
   }
 
-  # --- 3. 构建设计矩阵 ---
-  # 处理组名中的特殊字符 (如空格, -)
+  # --- 3. \u6784\u5EFA\u8BBE\u8BA1\u77E9\u9635 ---
+  # \u5904\u7406\u7EC4\u540D\u4E2D\u7684\u7279\u6B8A\u5B57\u7B26 (\u5982\u7A7A\u683C, -)
   clean_groups <- make.names(group_vec)
   clean_case <- make.names(case_group)
   clean_control <- make.names(control_group)
 
-  # 确保 Control 在前 (作为分母)
+  # \u786E\u4FDD Control \u5728\u524D (\u4F5C\u4E3A\u5206\u6BCD)
   group_factor <- factor(clean_groups, levels = c(clean_control, clean_case))
 
-  # 这里的 design 行数现在一定等于 exp_mat 列数
-  design <- model.matrix(~ 0 + group_factor)
+  # \u8FD9\u91CC\u7684 design \u884C\u6570\u73B0\u5728\u4E00\u5B9A\u7B49\u4E8E exp_mat \u5217\u6570
+  design <- stats::model.matrix(~ 0 + group_factor)
   colnames(design) <- levels(group_factor)
 
-  # --- 4. 线性拟合 ---
+  # --- 4. \u7EBF\u6027\u62DF\u5408 ---
   fit <- limma::lmFit(exp_mat, design)
 
-  # --- 5. 构建对比 ---
+  # --- 5. \u6784\u5EFA\u5BF9\u6BD4 ---
   contrast_str <- paste0(clean_case, " - ", clean_control)
   message(paste0("Running Contrast: ", contrast_str))
 
@@ -109,11 +108,11 @@ BulkLimma <- function(exp_mat,
   fit2 <- limma::contrasts.fit(fit, cont.matrix)
   fit2 <- limma::eBayes(fit2)
 
-  # --- 6. 提取结果 ---
+  # --- 6. \u63D0\u53D6\u7ED3\u679C ---
   DEG <- limma::topTable(fit2, coef = 1, n = Inf, adjust.method = adj_method)
   DEG <- tibble::rownames_to_column(DEG, var = "symbol")
 
-  # 添加 UP/DOWN 标记
+  # \u6DFB\u52A0 UP/DOWN \u6807\u8BB0
   DEG$change <- "NOT"
   DEG$change[DEG$adj.P.Val < p_cutoff & DEG$logFC > logfc_cutoff] <- "UP"
   DEG$change[DEG$adj.P.Val < p_cutoff & DEG$logFC < -logfc_cutoff] <- "DOWN"
@@ -123,7 +122,7 @@ BulkLimma <- function(exp_mat,
 
 
 
-# =============== GSEA富集分析  ================
+# =============== GSEA\u5BCC\u96C6\u5206\u6790  ================
 # =============== 2. GSEA  ================
 #' @title Run GSEA Analysis (GO) with Pre-ranked List
 #' @description A clean wrapper for clusterProfiler::gseGO.
@@ -196,4 +195,3 @@ BulkGseGO <- function(gene_rank,
   message(paste("GSEA Done. Significant terms:", nrow(gse_res)))
   return(gse_res)
 }
-

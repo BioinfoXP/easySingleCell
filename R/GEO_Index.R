@@ -16,14 +16,17 @@
 #'
 #' @param input_data Data.frame. The raw metadata table.
 #' @param batch_size Numeric. Number of rows to process per API call (Default 50).
-#' @param api_key OpenAI API Key.
-#' @param model LLM model (default "gpt-5-nano").
-#' @param base_url API Base URL.
+#' @param api_key OpenAI-compatible API key. Defaults to `OPENAI_API_KEY`.
+#' @param model Character or NULL. LLM model. If \code{NULL}, uses the
+#'   internal general AI model from \code{R/AI_config.R}.
+#' @param base_url Character or NULL. OpenAI-compatible API base URL. If
+#'   \code{NULL}, uses the internal base URL from \code{R/AI_config.R}.
+#' @param endpoint Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+#'   \code{"responses"}. \code{NULL} uses the package default \code{"auto"}.
 #' @param verbose Logical. Show progress bar.
 #'
 #' @return A data.frame with a new column \code{AI_SeqType} appended.
 #' @export
-#' @importFrom openai OpenAI
 #' @importFrom jsonlite fromJSON
 #' @importFrom glue glue
 #' @importFrom dplyr bind_rows
@@ -31,31 +34,39 @@
 #'
 #' @examples
 #' \dontrun{
-#'   # 1. 读取原始数据
-#'   # raw_df <- read.csv("1.肝癌.xlsx - Sheet1.csv")
+#'   # 1. Read raw GEO metadata.
+#'   # raw_df <- read.csv("geo_metadata.csv")
 #'
-#'   # 2. 运行分类 (打标签)
+#'   # 2. Run classification.
 #'   classified_df <- GEO_Classify_AI(
 #'     input_data = raw_df,
 #'     api_key = "sk-xxxxxx"
 #'   )
 #'
-#'   # 3. 查看分类结果统计
+#'   # 3. Inspect classification summary.
 #'   table(classified_df$AI_SeqType)
 #'
-#'   # 4. (可选) 将结果保存，供后续筛选使用
+#'   # 4. Optionally save results for downstream screening.
 #'   # save(classified_df, file = "geo_classified.Rdata")
 #' }
 GEO_Classify_AI <- function(input_data,
                             batch_size = 50,
                             api_key = NULL,
-                            model = "gpt-5-nano",
-                            base_url = "https://api.gpt.ge/v1",
+                            model = NULL,
+                            base_url = NULL,
+                            endpoint = NULL,
                             verbose = TRUE) {
 
   # 1. Setup
-  if (is.null(api_key)) api_key <- Sys.getenv("OPENAI_API_KEY")
-  if (api_key == "") stop("Please provide 'api_key'.")
+  provider <- .easyAI_build_provider(
+    api_key = api_key,
+    model = model,
+    base_url = base_url,
+    endpoint = endpoint,
+    task = "general"
+  )
+  model <- provider$model
+  api_key <- provider$api_key
 
   if (!is.data.frame(input_data) || nrow(input_data) == 0) {
     warning("Input data is empty.")
@@ -66,28 +77,27 @@ GEO_Classify_AI <- function(input_data,
   cols <- names(input_data)
 
   # ID (GSE)
-  id_col <- grep("数据集编号|GSE|Accession|dataset_id", cols, ignore.case=T, value=T)[1]
+  id_col <- grep("\u6570\u636E\u96C6\u7F16\u53F7|GSE|Accession|dataset_id", cols, ignore.case=T, value=T)[1]
   if(is.na(id_col)) id_col <- cols[1]
 
   # Platform
-  plat_col <- grep("测序平台|Platform|GPL|Instrument|sequencing_platform", cols, ignore.case=T, value=T)[1]
+  plat_col <- grep("\u6D4B\u5E8F\u5E73\u53F0|Platform|GPL|Instrument|sequencing_platform", cols, ignore.case=T, value=T)[1]
 
   # Description/Design
-  desc_col <- grep("实验设计|Title|Summary|Description|experimental_design", cols, ignore.case=T, value=T)[1]
+  desc_col <- grep("\u5B9E\u9A8C\u8BBE\u8BA1|Title|Summary|Description|experimental_design", cols, ignore.case=T, value=T)[1]
 
   if(is.na(desc_col)) stop("Could not find a 'Description/Title' column. AI needs text to classify.")
 
-  if (verbose) message(glue::glue("ℹ️  Columns Identified: ID='{id_col}', Platform='{plat_col}', Desc='{desc_col}'"))
+  if (verbose) message(glue::glue("\u2139\uFE0F  Columns Identified: ID='{id_col}', Platform='{plat_col}', Desc='{desc_col}'"))
 
   # 3. Batch Processing Setup
   n_rows <- nrow(input_data)
   n_batches <- ceiling(n_rows / batch_size)
-  client <- openai::OpenAI(api_key = api_key, base_url = base_url)
 
   results_list <- list()
 
   if (verbose) {
-    message(glue::glue("🚀 Starting Classification ({model}): {n_rows} datasets in {n_batches} batches..."))
+    message(glue::glue("\U0001F680 Starting Classification ({model}): {n_rows} datasets in {n_batches} batches..."))
     pb <- utils::txtProgressBar(min = 0, max = n_batches, style = 3)
   }
 
@@ -136,15 +146,15 @@ GEO_Classify_AI <- function(input_data,
 
     while (!success && retry_count < 3) {
       tryCatch({
-        resp <- client$chat$completions$create(
-          model = model,
+        content <- .easyAI_call_provider_messages(
           messages = list(list(role = "system", content = sys_prompt)),
+          provider = provider,
+          api_key = api_key,
           temperature = 0,
           response_format = list(type = "json_object")
         )
 
         # Parse JSON
-        content <- resp$choices[[1]]$message$content
         parsed <- jsonlite::fromJSON(content)
         res_df <- as.data.frame(parsed$classifications)
 
@@ -161,9 +171,17 @@ GEO_Classify_AI <- function(input_data,
 
       }, error = function(e) {
         retry_count <<- retry_count + 1
-        if(verbose) message(glue::glue("\n⚠️ Batch {i} failed (Attempt {retry_count}): {e$message}"))
+        if(verbose) message(glue::glue("\n\u26A0\uFE0F Batch {i} failed (Attempt {retry_count}): {e$message}"))
         Sys.sleep(1) # Wait before retry
       })
+    }
+
+    if (!success) {
+      results_list[[i]] <- data.frame(
+        ID = batch_df[[id_col]],
+        AI_SeqType = "Unknown",
+        stringsAsFactors = FALSE
+      )
     }
 
     if (verbose) utils::setTxtProgressBar(pb, i)
@@ -181,7 +199,7 @@ GEO_Classify_AI <- function(input_data,
 
   # 6. Summary Report
   if (verbose) {
-    message("\n✅ Classification Complete! Summary:")
+    message("\n\u2705 Classification Complete! Summary:")
     print(table(final_df$AI_SeqType))
   }
 
@@ -214,19 +232,22 @@ GEO_Classify_AI <- function(input_data,
 #' }
 #'
 #' @param input_data Data.frame. The metadata table. See "Input Data Requirements".
-#' @param disease String. Disease criterion (e.g. "胰腺癌"). AI checks `disease_type` or Description.
-#' @param data_type String. Sequencing type (e.g. "空间转录组"). AI checks `AI_SeqType` or Platform.
+#' @param disease String. Disease criterion (e.g. "pancreatic cancer"). AI checks `disease_type` or Description.
+#' @param data_type String. Sequencing type (e.g. "spatial transcriptomics"). AI checks `AI_SeqType` or Platform.
 #' @param target_species String. Species criterion. AI checks `species` column.
 #' @param other_req String. Any additional requirements (e.g., "Exclude cell lines").
 #' @param batch_size Numeric. Rows per AI call (Default 500).
-#' @param api_key OpenAI API Key.
-#' @param model LLM model (default "gpt-5-nano").
-#' @param base_url API Base URL.
+#' @param api_key OpenAI-compatible API key. Defaults to `OPENAI_API_KEY`.
+#' @param model Character or NULL. LLM model. If \code{NULL}, uses the
+#'   internal general AI model from \code{R/AI_config.R}.
+#' @param base_url Character or NULL. OpenAI-compatible API base URL. If
+#'   \code{NULL}, uses the internal base URL from \code{R/AI_config.R}.
+#' @param endpoint Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+#'   \code{"responses"}. \code{NULL} uses the package default \code{"auto"}.
 #' @param verbose Print debug info.
 #'
 #' @return A filtered, sorted, and deduplicated data.frame.
 #' @export
-#' @importFrom openai OpenAI
 #' @importFrom dplyr filter select arrange desc distinct mutate
 #' @importFrom glue glue
 #' @importFrom jsonlite fromJSON
@@ -237,14 +258,14 @@ GEO_Classify_AI <- function(input_data,
 #' @examples
 #' \dontrun{
 #'   # ========================================================
-#'   # 1. 构造模拟数据 (Mock Data)
+#'   # 1. Build mock data.
 #'   # ========================================================
-#'   # 假设这是您通过 GEO_Classify_AI 处理后的数据
+#'   # Assume this data was processed by GEO_Classify_AI.
 #'   mock_df <- data.frame(
 #'     dataset_id = c("GSE001", "GSE002", "GSE003", "GSE004"),
 #'     species = c("Homo sapiens", "Mus musculus", "Homo sapiens", "Homo sapiens"),
 #'     AI_SeqType = c("scRNA-seq", "Bulk RNA-seq", "stRNA-seq", "Microarray"),
-#'     disease_type = c("Pancreatic Cancer", "Liver Cancer", "胰腺导管腺癌", "Lung Cancer"),
+#'     disease_type = c("Pancreatic Cancer", "Liver Cancer", "Pancreatic Ductal Adenocarcinoma", "Lung Cancer"),
 #'     sample_size = c(10, 50, 5, 100),
 #'     experimental_design = c(
 #'       "Single cell analysis of 10 PDAC patients.",
@@ -255,39 +276,39 @@ GEO_Classify_AI <- function(input_data,
 #'   )
 #'
 #'   # ========================================================
-#'   # 2. 基础筛选: 找 "胰腺癌" 的 "单细胞" 数据
+#'   # 2. Basic screening: find pancreatic cancer scRNA-seq data.
 #'   # ========================================================
-#'   # 即使输入中文 "胰腺癌"，AI 也能匹配 "Pancreatic Cancer"
+#'   # AI can match related concepts such as PDAC and Pancreatic Cancer.
 #'   res1 <- GEO_Screen_AI(
 #'     input_data = mock_df,
-#'     disease = "胰腺癌",
+#'     disease = "pancreatic cancer",
 #'     data_type = "scRNA-seq",
 #'     api_key = "sk-xxxxxx"
 #'   )
-#'   # 预期结果: 选中 GSE001
+#'   # Expected result: GSE001.
 #'
 #'   # ========================================================
-#'   # 3. 跨语言语义筛选: 找 "空间转录组"
+#'   # 3. Semantic screening: find spatial transcriptomics data.
 #'   # ========================================================
-#'   # 输入 "空间转录组"，AI 能匹配 "stRNA-seq" 或 "Visium"
-#'   # 且能识别 "胰腺导管腺癌" 属于 "Pancreatic Cancer" 范畴
+#'   # AI can match "spatial transcriptomics" to stRNA-seq or Visium.
+#'   # It can also recognize PDAC as a pancreatic cancer context.
 #'   res2 <- GEO_Screen_AI(
 #'     input_data = mock_df,
 #'     disease = "Pancreatic Cancer",
-#'     data_type = "空间转录组",
+#'     data_type = "spatial transcriptomics",
 #'     api_key = "sk-xxxxxx"
 #'   )
-#'   # 预期结果: 选中 GSE003
+#'   # Expected result: GSE003.
 #'
 #'   # ========================================================
-#'   # 4. 复杂逻辑: 排除细胞系
+#'   # 4. Additional logic: exclude cell lines.
 #'   # ========================================================
 #'   res3 <- GEO_Screen_AI(
 #'     input_data = mock_df,
 #'     other_req = "Exclude cell lines",
 #'     api_key = "sk-xxxxxx"
 #'   )
-#'   # 预期结果: 排除 GSE004
+#'   # Expected result: exclude GSE004.
 #' }
 GEO_Screen_AI <- function(input_data,
                           disease = NULL,
@@ -296,17 +317,24 @@ GEO_Screen_AI <- function(input_data,
                           other_req = NULL,
                           batch_size = 500,
                           api_key = NULL,
-                          model = "gpt-5-nano",
-                          base_url = "https://api.gpt.ge/v1",
+                          model = NULL,
+                          base_url = NULL,
+                          endpoint = NULL,
                           verbose = TRUE) {
 
   # 1. Environment & Input Check
-  pkgs <- c("openai", "dplyr", "glue", "jsonlite", "stringr")
+  provider <- .easyAI_build_provider(
+    api_key = api_key,
+    model = model,
+    base_url = base_url,
+    endpoint = endpoint,
+    task = "general"
+  )
+  model <- provider$model
+  api_key <- provider$api_key
+  pkgs <- c("dplyr", "glue", "jsonlite", "stringr")
   missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
   if (length(missing) > 0) stop("Missing packages: ", paste(missing, collapse=", "))
-
-  if (is.null(api_key)) api_key <- Sys.getenv("OPENAI_API_KEY")
-  if (api_key == "") stop("Please provide 'api_key'.")
 
   if (!is.data.frame(input_data) || nrow(input_data) == 0) {
     warning("Input data is empty.")
@@ -317,24 +345,24 @@ GEO_Screen_AI <- function(input_data,
   cols <- names(input_data)
 
   # ID
-  id_col <- grep("数据集编号|GSE|Accession|dataset_id", cols, ignore.case=T, value=T)[1]
+  id_col <- grep("\u6570\u636E\u96C6\u7F16\u53F7|GSE|Accession|dataset_id", cols, ignore.case=T, value=T)[1]
   if(is.na(id_col)) id_col <- cols[1]
 
   # Context Columns (Match user provided str structure)
-  sp_col <- grep("物种|Species|Organism|species", cols, ignore.case=T, value=T)[1]
+  sp_col <- grep("\u7269\u79CD|Species|Organism|species", cols, ignore.case=T, value=T)[1]
   type_col <- grep("AI_SeqType|SequencingType|DataType", cols, ignore.case=T, value=T)[1]
   dis_col <- grep("disease_type|Disease|Condition", cols, ignore.case=T, value=T)[1]
-  desc_col <- grep("实验设计|Title|Summary|Description|experimental_design", cols, ignore.case=T, value=T)[1]
-  plat_col <- grep("测序平台|Platform|GPL|sequencing_platform", cols, ignore.case=T, value=T)[1]
+  desc_col <- grep("\u5B9E\u9A8C\u8BBE\u8BA1|Title|Summary|Description|experimental_design", cols, ignore.case=T, value=T)[1]
+  plat_col <- grep("\u6D4B\u5E8F\u5E73\u53F0|Platform|GPL|sequencing_platform", cols, ignore.case=T, value=T)[1]
 
   # Sample Size (for sorting only)
   num_cols <- names(input_data)[sapply(input_data, is.numeric)]
-  samp_col_num <- grep("样本量|Sample|Count|N_|sample_size", num_cols, ignore.case=T, value=T)[1]
-  samp_col_any <- grep("样本量|Sample|Count|N_|sample_size", cols, ignore.case=T, value=T)[1]
+  samp_col_num <- grep("\u6837\u672C\u91CF|Sample|Count|N_|sample_size", num_cols, ignore.case=T, value=T)[1]
+  samp_col_any <- grep("\u6837\u672C\u91CF|Sample|Count|N_|sample_size", cols, ignore.case=T, value=T)[1]
   samp_col <- if(!is.na(samp_col_num)) samp_col_num else samp_col_any
 
   if (verbose) {
-    message(glue::glue("ℹ️  Context Columns Found:\n   - ID: {id_col}\n   - Species: {sp_col}\n   - Type: {type_col}\n   - Disease: {dis_col}\n   - Desc: {desc_col}"))
+    message(glue::glue("\u2139\uFE0F  Context Columns Found:\n   - ID: {id_col}\n   - Species: {sp_col}\n   - Type: {type_col}\n   - Disease: {dis_col}\n   - Desc: {desc_col}"))
   }
 
   # 3. Construct AI Criteria Prompt
@@ -355,10 +383,8 @@ GEO_Screen_AI <- function(input_data,
   n_batches <- ceiling(n_total / batch_size)
   all_selected_ids <- c()
 
-  client <- openai::OpenAI(api_key = api_key, base_url = base_url)
-
   if (verbose) {
-    message(glue::glue("🧠 Starting Pure AI Scan ({model}): {n_total} datasets in {n_batches} batches..."))
+    message(glue::glue("\U0001F9E0 Starting Pure AI Scan ({model}): {n_total} datasets in {n_batches} batches..."))
     pb <- utils::txtProgressBar(min = 0, max = n_batches, style = 3)
   }
 
@@ -370,16 +396,16 @@ GEO_Screen_AI <- function(input_data,
 
     # Construct Context String per Row
     data_summary <- apply(batch_df, 1, function(row) {
-      # 显式地将关键列的内容标记出来，喂给 AI
+      # \u663E\u5F0F\u5730\u5C06\u5173\u952E\u5217\u7684\u5185\u5BB9\u6807\u8BB0\u51FA\u6765\uFF0C\u5582\u7ED9 AI
       info_parts <- c()
       if(!is.na(sp_col)) info_parts <- c(info_parts, paste0("[Sp: ", row[sp_col], "]"))
       if(!is.na(type_col)) info_parts <- c(info_parts, paste0("[Type: ", row[type_col], "]"))
       if(!is.na(dis_col)) info_parts <- c(info_parts, paste0("[Disease: ", row[dis_col], "]"))
 
-      # 补充描述信息
+      # \u8865\u5145\u63CF\u8FF0\u4FE1\u606F
       extra_desc <- ""
       if(!is.na(desc_col)) extra_desc <- as.character(row[desc_col])
-      # 如果描述太长，截断以节省 Token
+      # \u5982\u679C\u63CF\u8FF0\u592A\u957F\uFF0C\u622A\u65AD\u4EE5\u8282\u7701 Token
       if (nchar(extra_desc) > 300) extra_desc <- paste0(substr(extra_desc, 1, 297), "...")
 
       info_str <- paste(c(info_parts, extra_desc), collapse = " ")
@@ -398,9 +424,9 @@ GEO_Screen_AI <- function(input_data,
 
       --- RULES ---
       1. **Semantic Matching**:
-         - User '胰腺癌' matches data 'Pancreatic Cancer', 'PDAC' or context implying pancreas.
-         - User '空间转录组' matches data 'stRNA-seq', 'Visium', 'Spatial'.
-         - User '单细胞' matches 'scRNA-seq', 'Single Cell', '10x'.
+         - User '\u80F0\u817A\u764C' matches data 'Pancreatic Cancer', 'PDAC' or context implying pancreas.
+         - User '\u7A7A\u95F4\u8F6C\u5F55\u7EC4' matches data 'stRNA-seq', 'Visium', 'Spatial'.
+         - User '\u5355\u7EC6\u80DE' matches 'scRNA-seq', 'Single Cell', '10x'.
       2. **Output**: Valid JSON object {{ \"selected_ids\": [\"ID1\", \"ID2\"] }}
 
       --- DATA BATCH ---
@@ -409,20 +435,20 @@ GEO_Screen_AI <- function(input_data,
 
     # API Call
     tryCatch({
-      resp <- client$chat$completions$create(
-        model = model,
+      content <- .easyAI_call_provider_messages(
         messages = list(list(role = "system", content = sys_prompt)),
+        provider = provider,
+        api_key = api_key,
         temperature = 0,
         response_format = list(type = "json_object")
       )
 
       # Parse IDs
-      content <- resp$choices[[1]]$message$content
       ids <- jsonlite::fromJSON(content)$selected_ids
       all_selected_ids <- c(all_selected_ids, ids)
 
     }, error = function(e) {
-      if(verbose) message(glue::glue("\n⚠️ Batch {i} Error: {e$message}"))
+      if(verbose) message(glue::glue("\n\u26A0\uFE0F Batch {i} Error: {e$message}"))
     })
 
     if (verbose) utils::setTxtProgressBar(pb, i)
@@ -431,33 +457,32 @@ GEO_Screen_AI <- function(input_data,
 
   # 5. Result Filtering
   if (length(all_selected_ids) > 0) {
-    if (verbose) message(glue::glue("✅ AI Selected Total: {length(all_selected_ids)} IDs."))
+    if (verbose) message(glue::glue("\u2705 AI Selected Total: {length(all_selected_ids)} IDs."))
     final_df <- input_data[input_data[[id_col]] %in% all_selected_ids, ]
   } else {
-    message("⚠️  No datasets matched criteria.")
+    message("\u26A0\uFE0F  No datasets matched criteria.")
     return(input_data[0, ])
   }
 
   # 6. Post-Processing (Sort & Deduplicate)
-  final_df <- final_df %>% dplyr::distinct(!!rlang::sym(id_col), .keep_all = TRUE)
+  final_df <- dplyr::distinct(final_df, !!rlang::sym(id_col), .keep_all = TRUE)
 
   if (!is.na(samp_col)) {
-    # 提取数字排序
+    # \u63D0\u53D6\u6570\u5B57\u6392\u5E8F
     sample_nums <- stringr::str_extract(as.character(final_df[[samp_col]]), "^\\d+")
     if (all(is.na(sample_nums))) sample_nums <- final_df[[samp_col]]
 
-    # 创建临时列排序，防止污染原数据
-    final_df <- final_df %>%
-      dplyr::mutate(tmp_sort_N = suppressWarnings(as.numeric(sample_nums))) %>%
-      dplyr::arrange(dplyr::desc(tmp_sort_N)) %>%
-      dplyr::select(-tmp_sort_N)
+    # \u521B\u5EFA\u4E34\u65F6\u5217\u6392\u5E8F\uFF0C\u9632\u6B62\u6C61\u67D3\u539F\u6570\u636E
+    final_df$tmp_sort_N <- suppressWarnings(as.numeric(sample_nums))
+    final_df <- final_df[order(final_df$tmp_sort_N, decreasing = TRUE, na.last = TRUE), , drop = FALSE]
+    final_df$tmp_sort_N <- NULL
   }
 
   # Clean Columns (Put context cols first)
   prio_cols <- c(id_col, sp_col, type_col, dis_col, samp_col, desc_col)
   prio_cols <- prio_cols[!is.na(prio_cols) & prio_cols %in% names(final_df)]
   other_cols <- setdiff(names(final_df), prio_cols)
-  final_df <- final_df %>% dplyr::select(dplyr::all_of(c(prio_cols, other_cols)))
+  final_df <- dplyr::select(final_df, dplyr::all_of(c(prio_cols, other_cols)))
 
   return(final_df)
 }

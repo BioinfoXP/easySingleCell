@@ -32,6 +32,8 @@ scVisDotPlot(
 \item{scale.min}{Numeric. Minimum limit for scaled expression (default -2.5).}
 
 \item{scale.max}{Numeric. Maximum limit for scaled expression (default 2.5).}
+
+\item{...}{Additional arguments reserved for future extensions.}
 }
 \value{
 A ggplot object.

@@ -5,16 +5,19 @@
 \title{Add SCENIC AUC to Seurat with Beautified Logging}
 \usage{
 add_Umap_RAS(
-  sce,
-  auc_df,
+  object = NULL,
+  auc_df = NULL,
   reduction.name = "umap_ras",
   assay.name = "RAS",
   dims = 1:30,
-  n.neighbors = 30L
+  n.neighbors = 30L,
+  sce = object,
+  reduction = NULL,
+  assay = NULL
 )
 }
 \arguments{
-\item{sce}{A Seurat object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
 \item{auc_df}{A data.frame or matrix of AUC scores.}
 
@@ -25,6 +28,12 @@ add_Umap_RAS(
 \item{dims}{Integer vector for UMAP dimensions (default: 1:30).}
 
 \item{n.neighbors}{Integer for UMAP neighbors (default: 30).}
+
+\item{sce}{Backward-compatible alias for \code{object}.}
+
+\item{reduction}{Seurat-style alias for \code{reduction.name}.}
+
+\item{assay}{Seurat-style alias for \code{assay.name}.}
 }
 \value{
 A Seurat object with "RAS" assay and UMAP reduction.

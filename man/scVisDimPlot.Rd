@@ -61,6 +61,8 @@ scVisDimPlot(
 
 \item{legend.position}{Position of legend.}
 
+\item{aspect.ratio}{Plot aspect ratio. Default \code{1}.}
+
 \item{...}{Additional arguments.}
 }
 \value{

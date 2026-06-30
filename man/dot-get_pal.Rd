@@ -2,11 +2,11 @@
 % Please edit documentation in R/Intern.R
 \name{.get_pal}
 \alias{.get_pal}
-\title{配色获取泛型函数}
+\title{Generic Palette Resolver}
 \usage{
 .get_pal(x, n = NULL, ...)
 }
 \description{
-内部 S3 泛型系统，根据输入类型自动分发配色逻辑。
+Internal S3 generic that dispatches palette resolution by input type.
 }
 \keyword{internal}

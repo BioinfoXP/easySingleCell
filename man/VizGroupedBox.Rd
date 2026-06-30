@@ -70,14 +70,14 @@ to avoid compatibility warnings and ensure precise alignment.
 }
 \examples{
 \dontrun{
-  # 1. 默认图例在顶部
+  # 1. Default legend at the top.
   VizGroupedBox(df, x_col = "gene", y_col = "value", group_col = "group")
 
-  # 2. 图例在右侧
+  # 2. Put legend on the right.
   VizGroupedBox(df, x_col = "gene", y_col = "value", group_col = "group",
                 legend.position = "right")
 
-  # 3. 隐藏图例
+  # 3. Hide the legend.
   VizGroupedBox(df, x_col = "gene", y_col = "value", group_col = "group",
                 legend.position = "none")
 }

@@ -16,6 +16,8 @@ scVisRoePlot(
   cluster_rows = TRUE,
   cluster_cols = FALSE,
   font.size = 10,
+  font.size.row = font.size,
+  font.size.col = font.size,
   ...
 )
 }
@@ -34,7 +36,11 @@ scVisRoePlot(
 
 \item{min.rowSum}{Minimum row sum to keep a cell type. Default 0.}
 
-\item{display.mode}{Mode for cell annotation ("symbol", "numeric", "none").}
+\item{display.mode}{Mode for cell annotation ("symbol", "numeric", "none").
+In "symbol" mode, labels are centered on Ro/e = 1:
+"+++"/"++"/"+" indicate increasing enrichment, empty text indicates
+approximately expected abundance, and "-"/"--"/"---" indicate depletion.
+In "numeric" mode, Ro/e values are printed with two decimal places.}
 
 \item{cluster_rows}{Logical, whether to cluster rows. Default TRUE.}
 
@@ -42,10 +48,14 @@ scVisRoePlot(
 
 \item{font.size}{Font size for numbers/symbols. Default 10.}
 
+\item{font.size.row}{Font size for row names. Defaults to \code{font.size}.}
+
+\item{font.size.col}{Font size for column names. Defaults to \code{font.size}.}
+
 \item{...}{Additional arguments passed to \code{pheatmap}.}
 }
 \value{
-A pheatmap object (invisibly returns the Ro/e matrix).
+A pheatmap object with the Ro/e matrix attached as \code{attr(x, "roe_mat")}.
 }
 \description{
 Calculates and visualizes the Ratio of observed to expected (Ro/e) cell numbers,

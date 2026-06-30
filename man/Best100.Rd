@@ -7,10 +7,10 @@
 Best100(palette_num, n = NULL)
 }
 \arguments{
-\item{palette_num}{1 到 100 的整数。}
+\item{palette_num}{Integer from 1 to 100.}
 
-\item{n}{需要生成的颜色数量。若为 NULL，返回方案原始颜色。}
+\item{n}{Number of colors to generate. If \code{NULL}, returns the original scheme colors.}
 }
 \description{
-导出函数，允许用户从 100 种预定义方案中选择颜色。
+Select colors from 100 predefined palette schemes.
 }

@@ -12,17 +12,18 @@ GEO_Screen_AI(
   other_req = NULL,
   batch_size = 500,
   api_key = NULL,
-  model = "gpt-5-nano",
-  base_url = "https://api.gpt.ge/v1",
+  model = NULL,
+  base_url = NULL,
+  endpoint = NULL,
   verbose = TRUE
 )
 }
 \arguments{
 \item{input_data}{Data.frame. The metadata table. See "Input Data Requirements".}
 
-\item{disease}{String. Disease criterion (e.g. "胰腺癌"). AI checks \code{disease_type} or Description.}
+\item{disease}{String. Disease criterion (e.g. "pancreatic cancer"). AI checks \code{disease_type} or Description.}
 
-\item{data_type}{String. Sequencing type (e.g. "空间转录组"). AI checks \code{AI_SeqType} or Platform.}
+\item{data_type}{String. Sequencing type (e.g. "spatial transcriptomics"). AI checks \code{AI_SeqType} or Platform.}
 
 \item{target_species}{String. Species criterion. AI checks \code{species} column.}
 
@@ -30,11 +31,16 @@ GEO_Screen_AI(
 
 \item{batch_size}{Numeric. Rows per AI call (Default 500).}
 
-\item{api_key}{OpenAI API Key.}
+\item{api_key}{OpenAI-compatible API key. Defaults to \code{OPENAI_API_KEY}.}
 
-\item{model}{LLM model (default "gpt-5-nano").}
+\item{model}{Character or NULL. LLM model. If \code{NULL}, uses the
+internal general AI model from \code{R/AI_config.R}.}
 
-\item{base_url}{API Base URL.}
+\item{base_url}{Character or NULL. OpenAI-compatible API base URL. If
+\code{NULL}, uses the internal base URL from \code{R/AI_config.R}.}
+
+\item{endpoint}{Character or NULL. One of \code{"auto"}, \code{"chat"}, or
+\code{"responses"}. \code{NULL} uses the package default \code{"auto"}.}
 
 \item{verbose}{Print debug info.}
 }
@@ -67,14 +73,14 @@ While the function attempts to auto-detect columns, for best results, your table
 \examples{
 \dontrun{
   # ========================================================
-  # 1. 构造模拟数据 (Mock Data)
+  # 1. Build mock data.
   # ========================================================
-  # 假设这是您通过 GEO_Classify_AI 处理后的数据
+  # Assume this data was processed by GEO_Classify_AI.
   mock_df <- data.frame(
     dataset_id = c("GSE001", "GSE002", "GSE003", "GSE004"),
     species = c("Homo sapiens", "Mus musculus", "Homo sapiens", "Homo sapiens"),
     AI_SeqType = c("scRNA-seq", "Bulk RNA-seq", "stRNA-seq", "Microarray"),
-    disease_type = c("Pancreatic Cancer", "Liver Cancer", "胰腺导管腺癌", "Lung Cancer"),
+    disease_type = c("Pancreatic Cancer", "Liver Cancer", "Pancreatic Ductal Adenocarcinoma", "Lung Cancer"),
     sample_size = c(10, 50, 5, 100),
     experimental_design = c(
       "Single cell analysis of 10 PDAC patients.",
@@ -85,38 +91,38 @@ While the function attempts to auto-detect columns, for best results, your table
   )
 
   # ========================================================
-  # 2. 基础筛选: 找 "胰腺癌" 的 "单细胞" 数据
+  # 2. Basic screening: find pancreatic cancer scRNA-seq data.
   # ========================================================
-  # 即使输入中文 "胰腺癌"，AI 也能匹配 "Pancreatic Cancer"
+  # AI can match related concepts such as PDAC and Pancreatic Cancer.
   res1 <- GEO_Screen_AI(
     input_data = mock_df,
-    disease = "胰腺癌",
+    disease = "pancreatic cancer",
     data_type = "scRNA-seq",
     api_key = "sk-xxxxxx"
   )
-  # 预期结果: 选中 GSE001
+  # Expected result: GSE001.
 
   # ========================================================
-  # 3. 跨语言语义筛选: 找 "空间转录组"
+  # 3. Semantic screening: find spatial transcriptomics data.
   # ========================================================
-  # 输入 "空间转录组"，AI 能匹配 "stRNA-seq" 或 "Visium"
-  # 且能识别 "胰腺导管腺癌" 属于 "Pancreatic Cancer" 范畴
+  # AI can match "spatial transcriptomics" to stRNA-seq or Visium.
+  # It can also recognize PDAC as a pancreatic cancer context.
   res2 <- GEO_Screen_AI(
     input_data = mock_df,
     disease = "Pancreatic Cancer",
-    data_type = "空间转录组",
+    data_type = "spatial transcriptomics",
     api_key = "sk-xxxxxx"
   )
-  # 预期结果: 选中 GSE003
+  # Expected result: GSE003.
 
   # ========================================================
-  # 4. 复杂逻辑: 排除细胞系
+  # 4. Additional logic: exclude cell lines.
   # ========================================================
   res3 <- GEO_Screen_AI(
     input_data = mock_df,
     other_req = "Exclude cell lines",
     api_key = "sk-xxxxxx"
   )
-  # 预期结果: 排除 GSE004
+  # Expected result: exclude GSE004.
 }
 }

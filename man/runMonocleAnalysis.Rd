@@ -5,16 +5,17 @@
 \title{Run Complete Monocle2 Analysis with Stratified Downsampling}
 \usage{
 runMonocleAnalysis(
-  scRNA,
+  object = NULL,
   save_path = "./output_data/monocle2.RData",
   downsample_n = 5000,
   stratify_by = NULL,
   use_seurat_var_genes = TRUE,
-  cores = 4
+  cores = 4,
+  scRNA = object
 )
 }
 \arguments{
-\item{scRNA}{A Seurat Object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
 \item{save_path}{Path to save results.}
 
@@ -25,6 +26,8 @@ runMonocleAnalysis(
 \item{use_seurat_var_genes}{Logical. Use Seurat's VariableFeatures (Recommended).}
 
 \item{cores}{Number of cores.}
+
+\item{scRNA}{Backward-compatible alias for \code{object}.}
 }
 \description{
 A robust wrapper for Monocle2 with:

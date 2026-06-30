@@ -1,46 +1,31 @@
 Package: easySingleCell
-Title: Accelerate Bioinformatics Analysis for Bulk, scRNA-seq, and stRNA-seq
-Version: 1.0.8
+Title: Accelerate Bioinformatics Analysis for Bulk, scRNA-seq, and
+        stRNA-seq
+Version: 1.0.15
 Authors@R: 
     person("Peng", "Xia", , "xp294053@163.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: Streamlines bioinformatics analysis for bulk-seq, scRNA-seq, 
-    and stRNA-seq data. This package provides wrapper functions based on 
-    popular frameworks to simplify common workflows.
+           comment = NULL)
+Author: Peng Xia [aut, cre]
+Maintainer: Peng Xia <xp294053@163.com>
+Description: Streamlines bioinformatics analysis for bulk RNA-seq, scRNA-seq,
+    GEO metadata screening, DepMap visualization, gene ID conversion, and
+    function-level model-assisted annotation or metadata screening workflows.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-LazyData: true
-Depends: 
-    R (>= 4.2.0)
-Imports: 
-    Biobase,
-    clusterProfiler,
-    CytoTRACE,
-    dplyr,
-    tidyr,
-    ggplot2 (>= 3.5.0),
-    RColorBrewer,
-    limma,
-    magrittr,
-    Matrix,
-    methods,
-    org.Hs.eg.db,
-    patchwork,
-    pheatmap,
-    Seurat (>= 4.0.0),
-    tibble,
-    ggsignif,
-    ggpubr,
-    cowplot,
-    rlang
-Suggests: 
-    knitr,
-    rmarkdown,
-    testthat (>= 3.0.0),
-    jsonlite,
-    openai
+Depends: R (>= 4.2.0)
+Imports: AnnotationDbi, Biobase, clusterProfiler, CytoTRACE,
+        data.table, dplyr, ggalluvial, ggplot2 (>= 3.5.0), ggpubr,
+        ggrepel, ggsignif, glue, harmony, httr2, jsonlite, limma,
+        Matrix, methods, org.Hs.eg.db, patchwork, pheatmap, purrr,
+        RColorBrewer, scales, Seurat (>= 4.0.0), stringr, tibble,
+        tidyr, cowplot, rlang
+Suggests: celda, copykat, DoubletFinder, future, future.apply, knitr,
+        monocle, org.Mm.eg.db, org.Rn.eg.db, progressr, rmarkdown,
+        reticulate, Startrac, testthat (>= 3.0.0), VGAM
 VignetteBuilder: knitr
 URL: https://github.com/BioinfoXP/easySingleCell
 BugReports: https://github.com/BioinfoXP/easySingleCell/issues
+NeedsCompilation: no
+Packaged: 2026-06-30 06:25:55 UTC; xiap

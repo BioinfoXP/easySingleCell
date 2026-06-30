@@ -2,43 +2,75 @@
 % Please edit documentation in R/3.scRNA-symbol2ensembl.R
 \name{convert_sce_id}
 \alias{convert_sce_id}
-\title{Convert Feature IDs (Symbol <-> Ensembl)}
+\title{Convert Feature IDs in a Seurat Object}
 \usage{
 convert_sce_id(
-  sce,
+  object = NULL,
+  sce = object,
   assay = NULL,
+  layer = "counts",
   species = "human",
   target_species = "same",
   from_type = "symbol",
   to_type = "ensembl",
+  keytype = NULL,
+  column = NULL,
+  db = NULL,
+  target_db = NULL,
   db_human = NULL,
   db_mouse = NULL,
+  db_rat = NULL,
+  multiVals = "first",
+  project = NULL,
+  keep_unmapped = FALSE,
   verbose = TRUE
 )
 }
 \arguments{
-\item{sce}{A Seurat object.}
+\item{object}{A Seurat object. Old argument name \code{sce} is still supported.}
 
-\item{assay}{Name of the assay to use. Defaults to Seurat::DefaultAssay(sce).}
+\item{sce}{Deprecated alias for \code{object}.}
 
-\item{species}{Input species. Options: "human", "mouse".}
+\item{assay}{Name of the assay. Defaults to \code{Seurat::DefaultAssay(object)}.}
 
-\item{target_species}{Output species. Options: "same" (default), "human", "mouse".}
+\item{layer}{Matrix layer/slot to convert. Default \code{"counts"}.}
 
-\item{from_type}{The current format of rownames. Options: "symbol", "ensembl".}
+\item{species}{Input species. Options include \code{"human"}, \code{"mouse"}, and \code{"rat"}.}
 
-\item{to_type}{The desired output format. Options: "symbol", "ensembl".}
+\item{target_species}{Output species. Use \code{"same"} to keep the same species.}
+
+\item{from_type}{Input AnnotationDbi keytype. Lowercase aliases such as
+\code{"symbol"} and \code{"ensembl"} are accepted.}
+
+\item{to_type}{Output AnnotationDbi keytype.}
+
+\item{keytype}{Alias for \code{from_type}.}
+
+\item{column}{Alias for \code{to_type}.}
+
+\item{db}{Optional source OrgDb object.}
+
+\item{target_db}{Optional target OrgDb object.}
 
 \item{db_human}{Human annotation database. Default org.Hs.eg.db.}
 
 \item{db_mouse}{Mouse annotation database. Default org.Mm.eg.db.}
 
-\item{verbose}{Logical. Whether to print progress. Default TRUE.}
+\item{db_rat}{Rat annotation database. Default org.Rn.eg.db.}
+
+\item{multiVals}{Passed to \code{AnnotationDbi::mapIds}. Default \code{"first"}.}
+
+\item{project}{Project name for the returned Seurat object.}
+
+\item{keep_unmapped}{Keep unmapped features with their original IDs. Default \code{FALSE}.}
+
+\item{verbose}{Logical. Whether to print progress.}
 }
 \value{
-A new Seurat object with converted row names.
+A new Seurat object with converted row names and conversion metadata in \verb{@misc$id_conversion}.
 }
 \description{
-A tool to convert Seurat row names between Gene Symbols and Ensembl IDs.
-Compatible with Geneformer requirements (Raw counts + Ensembl IDs).
+Convert Seurat feature row names with AnnotationDbi keytypes.
+Supports common IDs such as \code{SYMBOL}, \code{ENSEMBL}, \code{ENTREZID}, \code{ALIAS},
+\code{UNIPROT}, and \code{REFSEQ} when the selected OrgDb provides them.
 }

@@ -5,17 +5,18 @@
 \title{scVis: Pure QC (No Plotting)}
 \usage{
 runScRNAQC(
-  sce,
+  object = NULL,
   minGene = 200,
   maxGene = 6000,
   pctMT = 20,
   maxCounts = 20000,
   species = "human",
-  mt_pattern = NULL
+  mt_pattern = NULL,
+  sce = object
 )
 }
 \arguments{
-\item{sce}{A Seurat object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
 \item{minGene}{Min detected genes (nFeature_RNA). Default 200.}
 
@@ -28,6 +29,8 @@ runScRNAQC(
 \item{species}{"human" (starts with MT-) or "mouse" (starts with mt-).}
 
 \item{mt_pattern}{Custom regex for mitochondrial genes. If NULL, infers from species.}
+
+\item{sce}{Backward-compatible alias for \code{object}.}
 }
 \value{
 A filtered Seurat object.

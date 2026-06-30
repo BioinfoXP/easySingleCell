@@ -5,18 +5,26 @@
 \title{Run Standard Preprocessing on a Seurat Object}
 \usage{
 run_preprocess(
-  seurat_obj,
+  object = NULL,
   dims = 1:50,
+  group.by = NULL,
   batch_var = "orig.ident",
-  n_features = 3000
+  n_features = 3000,
+  seurat_obj = object
 )
 }
 \arguments{
-\item{seurat_obj}{Seurat object.}
+\item{object}{A Seurat object. This Seurat-style argument is preferred.}
 
-\item{dims}{Dimensions for UMAP/Neighbors. Default 1:50.}
+\item{dims}{Dimensions for PCA/neighbor graph/UMAP. Default \code{1:50}.}
 
-\item{batch_var}{Column for Harmony.}
+\item{group.by}{Seurat-style alias for \code{batch_var}.}
+
+\item{batch_var}{Metadata column used by Harmony. Default \code{"orig.ident"}.}
+
+\item{n_features}{Number of variable features to select. Default \code{3000}.}
+
+\item{seurat_obj}{Backward-compatible alias for \code{object}.}
 }
 \description{
 Normalization, Scaling, PCA, Harmony, and UMAP.

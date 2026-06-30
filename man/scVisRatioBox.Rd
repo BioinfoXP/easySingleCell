@@ -59,10 +59,10 @@ Supports global tests (Kruskal/ANOVA), pairwise tests (Wilcox/T-test), and One-v
 }
 \examples{
 \dontrun{
-  # 1. 美化版 + 图例在右侧
+  # 1. Polished style with legend on the right.
   scVisRatioBox(sce, "Group", "celltype", "sample", legend_position = "right")
 
-  # 2. 指定参考组 + 隐藏 NS + 图例在顶部
+  # 2. Specify a reference group, hide NS labels, and put legend on top.
   scVisRatioBox(sce, "Group", "celltype", "sample",
                 ref_group = "Control", hide_ns = TRUE, legend_position = "top")
 }

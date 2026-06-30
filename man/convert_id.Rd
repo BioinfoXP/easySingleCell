@@ -2,7 +2,7 @@
 % Please edit documentation in R/3.scRNA-symbol2ensembl.R
 \name{convert_id}
 \alias{convert_id}
-\title{Convert Gene IDs (Vector -> DataFrame)}
+\title{Convert Gene IDs}
 \usage{
 convert_id(
   features,
@@ -10,42 +10,62 @@ convert_id(
   target_species = "same",
   from_type = "symbol",
   to_type = "ensembl",
+  keytype = NULL,
+  column = NULL,
+  db = NULL,
+  target_db = NULL,
   db_human = NULL,
   db_mouse = NULL,
+  db_rat = NULL,
+  multiVals = "first",
+  keep_unmapped = FALSE,
   verbose = TRUE
 )
 }
 \arguments{
 \item{features}{Character vector of gene IDs.}
 
-\item{species}{Input species ("human", "mouse").}
+\item{species}{Input species (\code{"human"}, \code{"mouse"}, or \code{"rat"}).}
 
-\item{target_species}{Output species ("same", "human", "mouse").}
+\item{target_species}{Output species. Use \code{"same"} to keep the same species.}
 
-\item{from_type}{Input format ("symbol", "ensembl").}
+\item{from_type}{Input AnnotationDbi keytype.}
 
-\item{to_type}{Output format ("symbol", "ensembl").}
+\item{to_type}{Output AnnotationDbi keytype.}
 
-\item{db_human}{Default org.Hs.eg.db.}
+\item{keytype}{Alias for \code{from_type}.}
 
-\item{db_mouse}{Default org.Mm.eg.db.}
+\item{column}{Alias for \code{to_type}.}
+
+\item{db}{Optional source OrgDb object.}
+
+\item{target_db}{Optional target OrgDb object.}
+
+\item{db_human}{Human annotation database. Default org.Hs.eg.db.}
+
+\item{db_mouse}{Mouse annotation database. Default org.Mm.eg.db.}
+
+\item{db_rat}{Rat annotation database. Default org.Rn.eg.db.}
+
+\item{multiVals}{Passed to \code{AnnotationDbi::mapIds}. Default \code{"first"}.}
+
+\item{keep_unmapped}{Keep unmapped features with original IDs. Default \code{FALSE}.}
 
 \item{verbose}{Print progress. Default TRUE.}
 }
 \value{
-A data frame with columns: 'Original_ID', 'Converted_ID'.
+A data frame with original IDs, converted IDs, keytypes, and species.
 }
 \description{
-Converts a vector of gene IDs to a target format/species.
+Convert a vector of IDs with AnnotationDbi keytypes. This is not
+limited to symbol/Ensembl conversion; any keytype supported by the chosen
+OrgDb can be used.
 }
 \examples{
 \dontrun{
-  genes <- c("TP53", "EGFR")
-  # Human Symbol -> Human Ensembl
-  df <- convert_id(genes, from_type = "symbol", to_type = "ensembl")
-
-  # Human Symbol -> Mouse Symbol
-  df_ms <- convert_id(genes, target_species = "mouse", to_type = "symbol")
+genes <- c("TP53", "EGFR")
+convert_id(genes, from_type = "symbol", to_type = "ensembl")
+convert_id(genes, from_type = "symbol", to_type = "entrezid")
+convert_id(c("7157", "1956"), from_type = "entrezid", to_type = "symbol")
 }
-
 }

@@ -28,4 +28,4 @@ VignetteBuilder: knitr
 URL: https://github.com/BioinfoXP/easySingleCell
 BugReports: https://github.com/BioinfoXP/easySingleCell/issues
 NeedsCompilation: no
-Packaged: 2026-06-30 06:25:55 UTC; xiap
+Packaged: 2026-06-30 07:28:25 UTC; xiap

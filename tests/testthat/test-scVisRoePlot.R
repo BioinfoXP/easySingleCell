@@ -34,11 +34,28 @@ test_that("Ro/e labels can be disabled", {
   expect_false(easySingleCell:::.scVisRoeLabels(roe_mat, "none"))
 })
 
+test_that("Ro/e heatmap breaks stay non-negative and keep 1 as visual center", {
+  roe_mat <- matrix(
+    c(3.4, 0.4, 1),
+    nrow = 1,
+    dimnames = list("celltype_a", c("high", "low", "expected"))
+  )
+
+  breaks <- easySingleCell:::.scVisRoeBreaks(roe_mat)
+
+  expect_equal(length(breaks), 101)
+  expect_true(min(breaks) >= 0)
+  expect_equal(breaks[51], 1)
+  expect_lte(max(roe_mat), max(breaks))
+  expect_gte(min(roe_mat), min(breaks))
+})
+
 test_that("scVisRoePlot exposes separate row and column font controls", {
   formals <- formals(scVisRoePlot)
 
   expect_true("font.size.row" %in% names(formals))
   expect_true("font.size.col" %in% names(formals))
+  expect_true("symbol.cutoffs" %in% names(formals))
   expect_identical(as.character(formals$font.size.row), "font.size")
   expect_identical(as.character(formals$font.size.col), "font.size")
 })

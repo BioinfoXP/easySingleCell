@@ -611,7 +611,55 @@ scVisRatioBox <- function(sce,
 # =============== 5.scVisRoePlot  ================
 # https://mp.weixin.qq.com/s/Fhz72Cjbd3zzCi1tB9xP5Q
 
-.scVisRoeLabels <- function(roe_mat, display.mode = c("symbol", "numeric", "none")) {
+.scVisRoeDefaultCutoffs <- function() {
+  c(
+    strong_enriched = 2,
+    moderate_enriched = 1.5,
+    weak_enriched = 1.1,
+    expected_low = 0.9,
+    weak_depleted = 0.67,
+    moderate_depleted = 0.5
+  )
+}
+
+.scVisRoeNormalizeCutoffs <- function(symbol.cutoffs = NULL) {
+  defaults <- .scVisRoeDefaultCutoffs()
+  if (is.null(symbol.cutoffs)) {
+    return(defaults)
+  }
+  if (is.null(names(symbol.cutoffs))) {
+    stop("'symbol.cutoffs' must be a named numeric vector.", call. = FALSE)
+  }
+  missing_names <- setdiff(names(defaults), names(symbol.cutoffs))
+  if (length(missing_names) > 0) {
+    stop(
+      "'symbol.cutoffs' is missing: ",
+      paste(missing_names, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  cutoffs <- defaults
+  cutoffs[names(defaults)] <- as.numeric(symbol.cutoffs[names(defaults)])
+  if (any(!is.finite(cutoffs))) {
+    stop("'symbol.cutoffs' must contain finite numeric values.", call. = FALSE)
+  }
+  if (!(
+    cutoffs[["strong_enriched"]] >= cutoffs[["moderate_enriched"]] &&
+      cutoffs[["moderate_enriched"]] >= cutoffs[["weak_enriched"]] &&
+      cutoffs[["weak_enriched"]] > 1 &&
+      cutoffs[["expected_low"]] < 1 &&
+      cutoffs[["expected_low"]] >= cutoffs[["weak_depleted"]] &&
+      cutoffs[["weak_depleted"]] >= cutoffs[["moderate_depleted"]] &&
+      cutoffs[["moderate_depleted"]] >= 0
+  )) {
+    stop("'symbol.cutoffs' must be ordered around Ro/e = 1.", call. = FALSE)
+  }
+  cutoffs
+}
+
+.scVisRoeLabels <- function(roe_mat,
+                            display.mode = c("symbol", "numeric", "none"),
+                            symbol.cutoffs = NULL) {
   display.mode <- match.arg(display.mode)
 
   if (display.mode == "none") {
@@ -628,17 +676,35 @@ scVisRatioBox <- function(sce,
     return(display_mat)
   }
 
-  display_mat <- ifelse(roe_mat >= 2, "+++",
-                        ifelse(roe_mat >= 1.5, "++",
-                               ifelse(roe_mat > 1.1, "+",
-                                      ifelse(roe_mat >= 0.9 & roe_mat <= 1.1, "",
-                                             ifelse(roe_mat >= 0.67, "-",
-                                                    ifelse(roe_mat >= 0.5, "--", "---"))))))
+  cutoffs <- .scVisRoeNormalizeCutoffs(symbol.cutoffs)
+  display_mat <- ifelse(roe_mat >= cutoffs[["strong_enriched"]], "+++",
+                        ifelse(roe_mat >= cutoffs[["moderate_enriched"]], "++",
+                               ifelse(roe_mat > cutoffs[["weak_enriched"]], "+",
+                                      ifelse(roe_mat >= cutoffs[["expected_low"]] &
+                                               roe_mat <= cutoffs[["weak_enriched"]], "",
+                                             ifelse(roe_mat >= cutoffs[["weak_depleted"]], "-",
+                                                    ifelse(roe_mat >= cutoffs[["moderate_depleted"]], "--", "---"))))))
 
   matrix(display_mat,
          nrow = nrow(roe_mat),
          ncol = ncol(roe_mat),
          dimnames = dimnames(roe_mat))
+}
+
+.scVisRoeBreaks <- function(roe_mat, n = 101) {
+  finite_values <- roe_mat[is.finite(roe_mat)]
+  if (length(finite_values) == 0) {
+    return(seq(0, 2, length.out = n))
+  }
+
+  lower_dev <- max(1 - min(finite_values, na.rm = TRUE), 0)
+  upper_dev <- max(max(finite_values, na.rm = TRUE) - 1, 0)
+  max_dev <- max(lower_dev, upper_dev, 0.1)
+  upper <- 1 + max_dev
+
+  lower_half <- seq(0, 1, length.out = ceiling(n / 2))
+  upper_half <- seq(1, upper, length.out = floor(n / 2) + 1)[-1]
+  c(lower_half, upper_half)
 }
 
 .scVisRoeHeatmap <- function(roe_mat,
@@ -649,19 +715,15 @@ scVisRatioBox <- function(sce,
                              font.size = 10,
                              font.size.row = font.size,
                              font.size.col = font.size,
+                             symbol.cutoffs = NULL,
                              ...) {
   display.mode <- match.arg(display.mode)
 
   my_palette <- grDevices::colorRampPalette(c("#483D8B", "#00FFFF", "#F8F8FF", "#FF69B4", "#8B008B"))(100)
 
-  max_abs_deviation <- max(abs(roe_mat - 1), na.rm = TRUE)
-  if (max_abs_deviation == 0) max_abs_deviation <- 0.1
+  my_breaks <- .scVisRoeBreaks(roe_mat)
 
-  my_breaks <- seq(1 - max_abs_deviation,
-                   1 + max_abs_deviation,
-                   length.out = 101)
-
-  display_mat <- .scVisRoeLabels(roe_mat, display.mode)
+  display_mat <- .scVisRoeLabels(roe_mat, display.mode, symbol.cutoffs = symbol.cutoffs)
 
   p <- pheatmap::pheatmap(roe_mat,
                           color = my_palette,
@@ -701,6 +763,11 @@ scVisRatioBox <- function(sce,
 #' @param font.size Font size for numbers/symbols. Default 10.
 #' @param font.size.row Font size for row names. Defaults to `font.size`.
 #' @param font.size.col Font size for column names. Defaults to `font.size`.
+#' @param symbol.cutoffs Named numeric vector used when \code{display.mode = "symbol"}.
+#'   Names must be \code{strong_enriched}, \code{moderate_enriched},
+#'   \code{weak_enriched}, \code{expected_low}, \code{weak_depleted}, and
+#'   \code{moderate_depleted}. Defaults to Ro/e thresholds 2, 1.5, 1.1,
+#'   0.9, 0.67, and 0.5.
 #' @param ... Additional arguments passed to \code{pheatmap}.
 #'
 #' @return A pheatmap object with the Ro/e matrix attached as `attr(x, "roe_mat")`.
@@ -722,6 +789,7 @@ scVisRoePlot <- function(sce,
                          font.size = 10,
                          font.size.row = font.size,
                          font.size.col = font.size,
+                         symbol.cutoffs = NULL,
                          ...) {
 
   # 1. \u68C0\u67E5\u4F9D\u8D56\u5305 Startrac
@@ -757,6 +825,7 @@ scVisRoePlot <- function(sce,
                    font.size = font.size,
                    font.size.row = font.size.row,
                    font.size.col = font.size.col,
+                   symbol.cutoffs = symbol.cutoffs,
                    ...)
 }
 

@@ -18,6 +18,7 @@ scVisRoePlot(
   font.size = 10,
   font.size.row = font.size,
   font.size.col = font.size,
+  symbol.cutoffs = NULL,
   ...
 )
 }
@@ -51,6 +52,12 @@ In "numeric" mode, Ro/e values are printed with two decimal places.}
 \item{font.size.row}{Font size for row names. Defaults to \code{font.size}.}
 
 \item{font.size.col}{Font size for column names. Defaults to \code{font.size}.}
+
+\item{symbol.cutoffs}{Named numeric vector used when \code{display.mode = "symbol"}.
+Names must be \code{strong_enriched}, \code{moderate_enriched},
+\code{weak_enriched}, \code{expected_low}, \code{weak_depleted}, and
+\code{moderate_depleted}. Defaults to Ro/e thresholds 2, 1.5, 1.1,
+0.9, 0.67, and 0.5.}
 
 \item{...}{Additional arguments passed to \code{pheatmap}.}
 }
